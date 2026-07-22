@@ -26,6 +26,23 @@ timezone-aware instant, an INTERVAL with closed bounded timezone-aware `[start, 
 values, or an explicit TIMELESS condition. Accepted datetimes are normalized to UTC.
 Interval start must be earlier than or equal to interval end.
 
-Identity, representation, authority, authentication, credentials, ingestion, freshness,
-TTL, staleness, sufficiency, conflicts, verdict semantics, evaluation, and provider
-mappings remain deferred.
+Canonical Evidence equality is exact over only the four identity-bearing contents:
+proposition, referent, source provenance, and temporal context. Proposition and
+referent equality require exact string content; similar wording or differently
+expressed references are distinct. Source provenance equality requires both source
+system and source occurrence to match. Temporal-context equality requires the same
+temporal form and normalized value. Equivalent timezone-aware instants normalize to
+equal UTC instants. Closed intervals permit equal bounds; different bounds are
+distinct.
+
+TIMELESS is an explicit condition. It is distinct from `None`, empty data, an unknown
+timestamp, or any other absence of temporal knowledge.
+
+Evidence has no non-identity-bearing canonical content. Changing proposition,
+referent, source provenance, or temporal context creates distinct Evidence. Evidence
+is immutable; updates are represented by replacement with a new Evidence artifact,
+not mutation.
+
+Authority, authentication, credentials, ingestion, freshness, TTL, staleness,
+sufficiency, conflicts, verdict semantics, evaluation, and provider mappings remain
+deferred.

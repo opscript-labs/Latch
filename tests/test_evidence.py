@@ -1,4 +1,4 @@
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, fields
 from datetime import UTC, datetime
 
 import pytest
@@ -113,6 +113,45 @@ def test_evidence_is_unequal_when_exactly_one_semantic_member_differs(
     assert Evidence(**values) != Evidence(**changed_values)
 
 
+def test_evidence_equality_requires_exact_proposition_content() -> None:
+    values = {
+        "proposition": "cpu activity is below the approved retirement boundary",
+        "referent": "temporary-environment:env-123",
+        "source_provenance": SOURCE_PROVENANCE,
+        "temporal_context": TEMPORAL_CONTEXT,
+    }
+    changed_values = {
+        **values,
+        "proposition": "cpu usage is below the approved retirement boundary",
+    }
+
+    assert Evidence(**values) != Evidence(**changed_values)
+
+
+def test_evidence_equality_requires_exact_referent_content() -> None:
+    values = {
+        "proposition": "cpu activity is below the approved retirement boundary",
+        "referent": "temporary-environment:env-123",
+        "source_provenance": SOURCE_PROVENANCE,
+        "temporal_context": TEMPORAL_CONTEXT,
+    }
+    changed_values = {
+        **values,
+        "referent": "env/env-123",
+    }
+
+    assert Evidence(**values) != Evidence(**changed_values)
+
+
+def test_evidence_has_only_four_canonical_identity_bearing_contents() -> None:
+    assert [field.name for field in fields(Evidence)] == [
+        "proposition",
+        "referent",
+        "source_provenance",
+        "temporal_context",
+    ]
+
+
 def test_evidence_is_defined_in_latch_domain_not_provider_package() -> None:
     assert Evidence.__module__ == "latch.domain.evidence.evidence"
 
@@ -181,6 +220,19 @@ def test_evidence_rejects_invalid_temporal_context() -> None:
             referent="temporary-environment:env-123",
             source_provenance=SOURCE_PROVENANCE,
             temporal_context="observed during retirement review window",
+        )
+
+
+@pytest.mark.parametrize("temporal_context", [None, "", "unknown"])
+def test_evidence_rejects_absent_empty_or_unknown_temporal_context(
+    temporal_context: object,
+) -> None:
+    with pytest.raises(ValueError, match="temporal_context"):
+        Evidence(
+            proposition="cpu activity is below the approved retirement boundary",
+            referent="temporary-environment:env-123",
+            source_provenance=SOURCE_PROVENANCE,
+            temporal_context=temporal_context,
         )
 
 
