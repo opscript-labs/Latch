@@ -12,6 +12,7 @@ EC2_INSTANCE_ARN_PATTERN = re.compile(
     r"instance/"
     r"(?P<instance_id>i-[0-9a-f]{8,17})$"
 )
+MAX_RESOURCE_TARGET_ARNS = 1_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,14 +48,29 @@ class Environment:
         if not self.resource_target_arns:
             raise ValueError("resource_target_arns must be non-empty")
 
+        if len(self.resource_target_arns) > MAX_RESOURCE_TARGET_ARNS:
+            raise ValueError("resource_target_arns must contain at most 1000 targets")
+
+        account_ids: set[str] = set()
+        regions: set[str] = set()
         for resource_target_arn in self.resource_target_arns:
             if not resource_target_arn.strip():
                 raise ValueError("resource_target_arns must contain non-empty values")
 
-            if not EC2_INSTANCE_ARN_PATTERN.fullmatch(resource_target_arn):
+            match = EC2_INSTANCE_ARN_PATTERN.fullmatch(resource_target_arn)
+            if match is None:
                 raise ValueError(
                     "resource_target_arns must contain valid EC2 instance ARNs"
                 )
+
+            account_ids.add(match.group("account_id"))
+            regions.add(match.group("region"))
+
+        if len(account_ids) > 1:
+            raise ValueError("resource_target_arns must share one AWS account ID")
+
+        if len(regions) > 1:
+            raise ValueError("resource_target_arns must share one AWS Region")
 
         if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
             raise ValueError("created_at must be timezone-aware")

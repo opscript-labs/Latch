@@ -14,6 +14,10 @@ RESOURCE_TARGET_ARNS = frozenset(
 )
 
 
+def ec2_instance_arn(instance_number: int, region: str = "us-east-1") -> str:
+    return f"arn:aws:ec2:{region}:123456789012:instance/i-{instance_number:017x}"
+
+
 def test_environment_accepts_valid_ec2_instance_arn_targets() -> None:
     environment = Environment(
         identifier="env-123",
@@ -28,6 +32,71 @@ def test_environment_accepts_valid_ec2_instance_arn_targets() -> None:
     assert environment.ttl_expires_at == TTL_EXPIRES_AT
     assert environment.owner == "team-platform"
     assert environment.resource_target_arns == RESOURCE_TARGET_ARNS
+
+
+def test_environment_accepts_single_account_single_region_targets() -> None:
+    environment = Environment(
+        identifier="env-123",
+        created_at=CREATED_AT,
+        ttl_expires_at=TTL_EXPIRES_AT,
+        owner="team-platform",
+        resource_target_arns={ec2_instance_arn(1), ec2_instance_arn(2)},
+    )
+
+    assert environment.resource_target_arns == frozenset(
+        {ec2_instance_arn(1), ec2_instance_arn(2)}
+    )
+
+
+def test_environment_rejects_account_mismatch_targets() -> None:
+    with pytest.raises(ValueError, match="account"):
+        Environment(
+            identifier="env-123",
+            created_at=CREATED_AT,
+            ttl_expires_at=TTL_EXPIRES_AT,
+            owner="team-platform",
+            resource_target_arns={
+                "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0",
+                "arn:aws:ec2:us-east-1:210987654321:instance/i-0fedcba9876543210",
+            },
+        )
+
+
+def test_environment_rejects_region_mismatch_targets() -> None:
+    with pytest.raises(ValueError, match="Region"):
+        Environment(
+            identifier="env-123",
+            created_at=CREATED_AT,
+            ttl_expires_at=TTL_EXPIRES_AT,
+            owner="team-platform",
+            resource_target_arns={
+                "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0",
+                "arn:aws:ec2:us-west-2:123456789012:instance/i-0fedcba9876543210",
+            },
+        )
+
+
+def test_environment_accepts_exactly_1000_targets() -> None:
+    environment = Environment(
+        identifier="env-123",
+        created_at=CREATED_AT,
+        ttl_expires_at=TTL_EXPIRES_AT,
+        owner="team-platform",
+        resource_target_arns={ec2_instance_arn(number) for number in range(1000)},
+    )
+
+    assert len(environment.resource_target_arns) == 1000
+
+
+def test_environment_rejects_1001_targets() -> None:
+    with pytest.raises(ValueError, match="1000"):
+        Environment(
+            identifier="env-123",
+            created_at=CREATED_AT,
+            ttl_expires_at=TTL_EXPIRES_AT,
+            owner="team-platform",
+            resource_target_arns={ec2_instance_arn(number) for number in range(1001)},
+        )
 
 
 def test_environment_rejects_empty_identifier() -> None:

@@ -9,10 +9,12 @@ collapse through set semantics, and target ordering does not affect Environment
 identity or hashing. Changing target membership creates a distinct Environment
 registration.
 
-An Environment represents only those registered EC2 instances. Only exact
-registered target members are eligible future destruction targets. Tags and
-retirement-time discovery cannot alter target membership. Empty target sets are
-not approved for this execution capability.
+An Environment represents only those registered EC2 instances. One Environment
+maps to one same-account, same-Region EC2 target set containing from 1 through
+1,000 distinct EC2 instance ARNs. Only exact registered target members are
+eligible future destruction targets. Tags and retirement-time discovery cannot
+alter target membership. Empty target sets are not approved for this execution
+capability.
 
 Attached volumes, security groups, load balancers, stacks, tags, and inferred
 related resources are excluded.
