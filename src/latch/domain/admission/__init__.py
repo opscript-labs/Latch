@@ -25,6 +25,10 @@ from latch.domain.admission.operational_conflict_recognition_coverage import (
     OperationalConflictRecognitionCoverage,
 )
 from latch.domain.admission.operational_conflict_set import OperationalConflictSet
+from latch.domain.admission.operational_conflict_status import (
+    OperationalConflictStatus,
+    OperationalConflictStatusOutcome,
+)
 from latch.domain.admission.operational_dimension import (
     OperationalDimension,
     OperationalDimensionAssociation,
@@ -62,6 +66,8 @@ __all__ = [
     "OperationalConflictRecognitionCoverage",
     "OperationalConflictRecognitionOutcome",
     "OperationalConflictSet",
+    "OperationalConflictStatus",
+    "OperationalConflictStatusOutcome",
     "OperationalDimension",
     "OperationalDimensionAssociation",
     "OperationalDimensionAssociationPair",
