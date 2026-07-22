@@ -40,6 +40,7 @@ def make_context() -> AdmissionEvaluationContext:
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
+        resource_target_arns={"arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api"},
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=CONTEXT_EVALUATED_AT,

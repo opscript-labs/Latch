@@ -25,6 +25,7 @@ def make_environment(
         created_at=CREATED_AT,
         ttl_expires_at=TTL_EXPIRES_AT,
         owner=owner,
+        resource_target_arns={"arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api"},
     )
 
 
