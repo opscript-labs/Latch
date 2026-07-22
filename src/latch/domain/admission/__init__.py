@@ -37,6 +37,10 @@ from latch.domain.admission.operational_dimension_association_set import (
     OperationalDimensionAssociationPair,
     OperationalDimensionAssociationSet,
 )
+from latch.domain.admission.operational_retirement_readiness import (
+    OperationalRetirementReadiness,
+    OperationalRetirementReadinessOutcome,
+)
 from latch.domain.admission.operational_temporal_relationship import (
     OperationalTemporalRelationship,
     OperationalTemporalRelationshipOutcome,
@@ -72,6 +76,8 @@ __all__ = [
     "OperationalDimensionAssociation",
     "OperationalDimensionAssociationPair",
     "OperationalDimensionAssociationSet",
+    "OperationalRetirementReadiness",
+    "OperationalRetirementReadinessOutcome",
     "OperationalTemporalRelationship",
     "OperationalTemporalRelationshipOutcome",
     "OperationalAssertionEstablishment",
