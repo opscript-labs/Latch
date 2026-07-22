@@ -1,0 +1,1 @@
+"""Admission domain package."""
