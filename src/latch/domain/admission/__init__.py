@@ -13,6 +13,10 @@ from latch.domain.admission.operational_assertion import (
     OperationalAssertionOutcome,
     OperationalAssertionProjection,
 )
+from latch.domain.admission.operational_dimension import (
+    OperationalDimension,
+    OperationalDimensionAssociation,
+)
 from latch.domain.admission.relevance import is_evidence_relevant_to_context
 from latch.domain.admission.source_standing import (
     OperationalAssertionEstablishment,
@@ -32,6 +36,8 @@ __all__ = [
     "EstablishedOperationalPropositionSet",
     "OperationalAssertionOutcome",
     "OperationalAssertionProjection",
+    "OperationalDimension",
+    "OperationalDimensionAssociation",
     "OperationalAssertionEstablishment",
     "OperationalEstablishmentOutcome",
     "SourceStandingOutcome",
