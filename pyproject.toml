@@ -9,6 +9,7 @@ authors = [
   { name = "Latch Contributors" }
 ]
 dependencies = [
+  "boto3>=1.40.0",
   "fastapi>=0.116.0",
   "pydantic>=2.11.0",
   "uvicorn[standard]>=0.35.0",
