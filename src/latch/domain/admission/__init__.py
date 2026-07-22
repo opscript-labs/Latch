@@ -51,6 +51,10 @@ from latch.domain.admission.owner_approval_participation import (
 )
 from latch.domain.admission.owner_retirement_approval import OwnerRetirementApproval
 from latch.domain.admission.relevance import is_evidence_relevant_to_context
+from latch.domain.admission.retirement_lock import RetirementLock
+from latch.domain.admission.retirement_lock_participation import (
+    RetirementLockParticipation,
+)
 from latch.domain.admission.retirement_prerequisite_status import (
     RetirementPrerequisiteStatus,
     RetirementPrerequisiteStatusOutcome,
@@ -100,6 +104,8 @@ __all__ = [
     "RetirementPrerequisiteStatusOutcome",
     "RetirementTimingEligibility",
     "RetirementTimingEligibilityOutcome",
+    "RetirementLock",
+    "RetirementLockParticipation",
     "OperationalAssertionEstablishment",
     "OperationalEstablishmentOutcome",
     "SourceStandingOutcome",
