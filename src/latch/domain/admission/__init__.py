@@ -17,6 +17,10 @@ from latch.domain.admission.operational_compatibility import (
     OperationalAssertionCompatibility,
     OperationalCompatibilityOutcome,
 )
+from latch.domain.admission.operational_conflict import (
+    OperationalConflictRecognition,
+    OperationalConflictRecognitionOutcome,
+)
 from latch.domain.admission.operational_dimension import (
     OperationalDimension,
     OperationalDimensionAssociation,
@@ -46,6 +50,8 @@ __all__ = [
     "OperationalAssertionProjection",
     "OperationalAssertionCompatibility",
     "OperationalCompatibilityOutcome",
+    "OperationalConflictRecognition",
+    "OperationalConflictRecognitionOutcome",
     "OperationalDimension",
     "OperationalDimensionAssociation",
     "OperationalTemporalRelationship",
