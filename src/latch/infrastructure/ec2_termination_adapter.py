@@ -1,6 +1,5 @@
 from typing import Any
 
-import boto3  # type: ignore[import-untyped]
 from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
 
 from latch.domain.environment.environment import EC2_INSTANCE_ARN_PATTERN, Environment
@@ -10,6 +9,7 @@ from latch.domain.execution import (
     RetirementExecutionAuthorization,
     RetirementExecutionAuthorizationOutcome,
 )
+from latch.infrastructure.ecs_task_role_credentials import create_ecs_task_role_session
 
 
 class EC2TerminationAdapter:
@@ -33,7 +33,8 @@ class EC2TerminationAdapter:
             target["instance_id"]: target["arn"] for target in parsed_targets
         }
 
-        ec2_client = boto3.client("ec2", region_name=region)
+        session = create_ecs_task_role_session()
+        ec2_client = session.client("ec2", region_name=region)
 
         try:
             response = ec2_client.terminate_instances(

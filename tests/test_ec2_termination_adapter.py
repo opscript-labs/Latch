@@ -152,12 +152,16 @@ def make_client(response: dict[str, object] | None = None) -> Mock:
 
 def test_authorized_request_creates_one_ec2_client_in_registered_region() -> None:
     client = make_client()
+    session = Mock()
+    session.client.return_value = client
 
-    with patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory:
-        factory.return_value = client
+    with patch(
+        "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+        return_value=session,
+    ):
         EC2TerminationAdapter().terminate(make_authorization())
 
-    factory.assert_called_once_with("ec2", region_name="us-east-1")
+    session.client.assert_called_once_with("ec2", region_name="us-east-1")
 
 
 def test_request_contains_exactly_registered_instance_ids() -> None:
@@ -172,9 +176,13 @@ def test_request_contains_exactly_registered_instance_ids() -> None:
     authorization = make_authorization(
         context=make_context(resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET}))
     )
+    session = Mock()
+    session.client.return_value = client
 
-    with patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory:
-        factory.return_value = client
+    with patch(
+        "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+        return_value=session,
+    ):
         EC2TerminationAdapter().terminate(authorization)
 
     requested_ids = client.terminate_instances.call_args.kwargs["InstanceIds"]
@@ -183,7 +191,9 @@ def test_request_contains_exactly_registered_instance_ids() -> None:
 
 def test_refused_authorization_creates_no_client_and_makes_no_aws_call() -> None:
     with (
-        patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory,
+        patch(
+            "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session"
+        ) as factory,
         pytest.raises(ValueError, match="authorize"),
     ):
         EC2TerminationAdapter().terminate(make_authorization(with_approval=False))
@@ -193,9 +203,13 @@ def test_refused_authorization_creates_no_client_and_makes_no_aws_call() -> None
 
 def test_complete_expected_response_returns_accepted_invocation() -> None:
     client = make_client()
+    session = Mock()
+    session.client.return_value = client
 
-    with patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory:
-        factory.return_value = client
+    with patch(
+        "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+        return_value=session,
+    ):
         invocation = EC2TerminationAdapter().terminate(make_authorization())
 
     assert isinstance(invocation, EC2TerminationInvocation)
@@ -207,9 +221,13 @@ def test_missing_response_entry_returns_not_accepted_invocation() -> None:
     authorization = make_authorization(
         context=make_context(resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET}))
     )
+    session = Mock()
+    session.client.return_value = client
 
-    with patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory:
-        factory.return_value = client
+    with patch(
+        "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+        return_value=session,
+    ):
         invocation = EC2TerminationAdapter().terminate(authorization)
 
     assert (
@@ -228,9 +246,13 @@ def test_duplicate_response_entry_returns_not_accepted_invocation() -> None:
             ]
         }
     )
+    session = Mock()
+    session.client.return_value = client
 
-    with patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory:
-        factory.return_value = client
+    with patch(
+        "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+        return_value=session,
+    ):
         invocation = EC2TerminationAdapter().terminate(make_authorization())
 
     assert (
@@ -248,9 +270,13 @@ def test_unexpected_response_entry_returns_not_accepted_invocation() -> None:
             ]
         }
     )
+    session = Mock()
+    session.client.return_value = client
 
-    with patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory:
-        factory.return_value = client
+    with patch(
+        "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+        return_value=session,
+    ):
         invocation = EC2TerminationAdapter().terminate(make_authorization())
 
     assert (
@@ -261,9 +287,13 @@ def test_unexpected_response_entry_returns_not_accepted_invocation() -> None:
 
 def test_malformed_response_entry_returns_not_accepted_invocation() -> None:
     client = make_client({"TerminatingInstances": [{"InstanceId": 123}]})
+    session = Mock()
+    session.client.return_value = client
 
-    with patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory:
-        factory.return_value = client
+    with patch(
+        "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+        return_value=session,
+    ):
         invocation = EC2TerminationAdapter().terminate(make_authorization())
 
     assert (
@@ -280,9 +310,13 @@ def test_request_level_sdk_failure_returns_not_accepted_for_every_registered_tar
     authorization = make_authorization(
         context=make_context(resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET}))
     )
+    session = Mock()
+    session.client.return_value = client
 
-    with patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory:
-        factory.return_value = client
+    with patch(
+        "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+        return_value=session,
+    ):
         invocation = EC2TerminationAdapter().terminate(authorization)
 
     assert (
@@ -299,9 +333,13 @@ def test_request_level_sdk_failure_returns_not_accepted_for_every_registered_tar
 
 def test_adapter_never_returns_destruction_confirmation() -> None:
     client = make_client()
+    session = Mock()
+    session.client.return_value = client
 
-    with patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory:
-        factory.return_value = client
+    with patch(
+        "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+        return_value=session,
+    ):
         invocation = EC2TerminationAdapter().terminate(make_authorization())
 
     assert isinstance(invocation, EC2TerminationInvocation)
@@ -310,9 +348,24 @@ def test_adapter_never_returns_destruction_confirmation() -> None:
 
 def test_no_static_credentials_are_passed_to_client() -> None:
     client = make_client()
+    session = Mock()
+    session.client.return_value = client
 
-    with patch("latch.infrastructure.ec2_termination_adapter.boto3.client") as factory:
-        factory.return_value = client
+    with patch(
+        "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+        return_value=session,
+    ):
         EC2TerminationAdapter().terminate(make_authorization())
 
-    assert set(factory.call_args.kwargs) == {"region_name"}
+    assert set(session.client.call_args.kwargs) == {"region_name"}
+
+
+def test_provider_failure_creates_no_ec2_client_and_no_request() -> None:
+    with (
+        patch(
+            "latch.infrastructure.ec2_termination_adapter.create_ecs_task_role_session",
+            side_effect=RuntimeError("credentials unavailable"),
+        ),
+        pytest.raises(RuntimeError, match="credentials unavailable"),
+    ):
+        EC2TerminationAdapter().terminate(make_authorization())
