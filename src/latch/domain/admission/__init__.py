@@ -46,6 +46,10 @@ from latch.domain.admission.operational_temporal_relationship import (
     OperationalTemporalRelationshipOutcome,
 )
 from latch.domain.admission.relevance import is_evidence_relevant_to_context
+from latch.domain.admission.retirement_timing_eligibility import (
+    RetirementTimingEligibility,
+    RetirementTimingEligibilityOutcome,
+)
 from latch.domain.admission.source_standing import (
     OperationalAssertionEstablishment,
     OperationalEstablishmentOutcome,
@@ -80,6 +84,8 @@ __all__ = [
     "OperationalRetirementReadinessOutcome",
     "OperationalTemporalRelationship",
     "OperationalTemporalRelationshipOutcome",
+    "RetirementTimingEligibility",
+    "RetirementTimingEligibilityOutcome",
     "OperationalAssertionEstablishment",
     "OperationalEstablishmentOutcome",
     "SourceStandingOutcome",
