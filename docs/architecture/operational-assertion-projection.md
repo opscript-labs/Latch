@@ -25,6 +25,23 @@ participate in identity.
 Operational assertions are not facts, source authority, authenticity, reliability,
 sufficiency, conflict resolution, verdicts, or retirement outcomes.
 
-Source authority, fact establishment, aggregation, sufficiency, conflict handling,
-verdicts, retirement execution, provider mappings, APIs, persistence, AWS integration,
-Terraform resources, dependencies, and serialization remain deferred.
+Source standing is closed to STANDING and NO_STANDING. Standing is determined only by
+one `(source_system, proposition_classification)` pair. The approved standing pairs are:
+
+- `aws.cloudwatch.metrics` with OPERATIONAL_INACTIVITY
+- `aws.cloudtrail.event` with OPERATIONAL_ACTIVITY
+
+Operational establishment is closed to ESTABLISHES_OPERATIONAL_ACTIVITY,
+ESTABLISHES_OPERATIONAL_INACTIVITY, and ESTABLISHES_NOTHING. A relevant activity
+assertion with STANDING establishes operational activity; a relevant inactivity
+assertion with STANDING establishes operational inactivity; every other combination
+establishes nothing.
+
+Established remains limited to the approved source account establishing that one
+operational proposition. It does not imply conflict resolution, sufficiency, or a
+retirement verdict.
+
+Authentication, credentials, ingestion, source ranking, aggregation, sufficiency,
+conflict handling, verdicts, retirement execution, provider mappings, APIs,
+persistence, AWS integration, Terraform resources, dependencies, and serialization
+remain deferred.

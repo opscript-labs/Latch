@@ -16,11 +16,16 @@ The current internal domain artifact embodies Evidence using four approved seman
 propositions: proposition, referent, source provenance, and temporal context.
 Canonical external representation remains deferred.
 
+Source provenance is structured as exactly one source system and one source
+occurrence. Both are required, identity-bearing Evidence content. Source provenance
+does not add authentication, credentials, ingestion behavior, provider adapters,
+serialization, or source metadata.
+
 Canonical Evidence temporal context is closed to exactly one of: an INSTANT with one
 timezone-aware instant, an INTERVAL with closed bounded timezone-aware `[start, end]`
 values, or an explicit TIMELESS condition. Accepted datetimes are normalized to UTC.
 Interval start must be earlier than or equal to interval end.
 
-Identity, representation, authority, admissibility, freshness, TTL, staleness,
-sufficiency, conflicts, verdict semantics, evaluation, and provider mappings remain
-deferred.
+Identity, representation, authority, authentication, credentials, ingestion, freshness,
+TTL, staleness, sufficiency, conflicts, verdict semantics, evaluation, and provider
+mappings remain deferred.

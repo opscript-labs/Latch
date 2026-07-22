@@ -7,14 +7,17 @@ from latch.domain.admission import (
     EvidencePropositionClassification,
     EvidencePropositionClassificationAssociation,
 )
-from latch.domain.evidence import Evidence, EvidenceInstant
+from latch.domain.evidence import Evidence, EvidenceInstant, SourceProvenance
 
 
 def make_evidence(proposition: str = "cpu activity was observed") -> Evidence:
     return Evidence(
         proposition=proposition,
         referent="temporary-environment:env-123",
-        source_provenance="cloudwatch metric query at 2026-07-23T10:00:00Z",
+        source_provenance=SourceProvenance(
+            source_system="aws.cloudwatch.metrics",
+            source_occurrence="cloudwatch metric query at 2026-07-23T10:00:00Z",
+        ),
         temporal_context=EvidenceInstant(datetime(2026, 7, 23, 10, 0, tzinfo=UTC)),
     )
 

@@ -10,6 +10,12 @@ from latch.domain.admission.operational_assertion import (
     OperationalAssertionProjection,
 )
 from latch.domain.admission.relevance import is_evidence_relevant_to_context
+from latch.domain.admission.source_standing import (
+    OperationalAssertionEstablishment,
+    OperationalEstablishmentOutcome,
+    SourceStandingOutcome,
+    determine_source_standing,
+)
 from latch.domain.admission.verdict import AdmissionVerdict
 
 __all__ = [
@@ -20,5 +26,9 @@ __all__ = [
     "EvidencePropositionClassificationAssociation",
     "OperationalAssertionOutcome",
     "OperationalAssertionProjection",
+    "OperationalAssertionEstablishment",
+    "OperationalEstablishmentOutcome",
+    "SourceStandingOutcome",
+    "determine_source_standing",
     "is_evidence_relevant_to_context",
 ]

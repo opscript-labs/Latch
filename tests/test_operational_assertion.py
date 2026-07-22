@@ -12,7 +12,7 @@ from latch.domain.admission import (
     OperationalAssertionProjection,
 )
 from latch.domain.environment import Environment
-from latch.domain.evidence import Evidence, EvidenceInstant
+from latch.domain.evidence import Evidence, EvidenceInstant, SourceProvenance
 
 CREATED_AT = datetime(2026, 7, 23, 8, 0, tzinfo=UTC)
 TTL_EXPIRES_AT = datetime(2026, 7, 23, 12, 0, tzinfo=UTC)
@@ -44,7 +44,10 @@ def make_evidence(
     return Evidence(
         proposition=proposition,
         referent=referent,
-        source_provenance="cloudwatch metric query at 2026-07-23T10:00:00Z",
+        source_provenance=SourceProvenance(
+            source_system="aws.cloudtrail.event",
+            source_occurrence="cloudtrail event at 2026-07-23T10:00:00Z",
+        ),
         temporal_context=EvidenceInstant(observed_at),
     )
 
