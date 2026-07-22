@@ -1,6 +1,10 @@
 """Admission domain package."""
 
 from latch.domain.admission.context import AdmissionEvaluationContext, AdmissionRequest
+from latch.domain.admission.established_operational_proposition_set import (
+    EstablishedOperationalProposition,
+    EstablishedOperationalPropositionSet,
+)
 from latch.domain.admission.evidence_classification import (
     EvidencePropositionClassification,
     EvidencePropositionClassificationAssociation,
@@ -24,6 +28,8 @@ __all__ = [
     "AdmissionVerdict",
     "EvidencePropositionClassification",
     "EvidencePropositionClassificationAssociation",
+    "EstablishedOperationalProposition",
+    "EstablishedOperationalPropositionSet",
     "OperationalAssertionOutcome",
     "OperationalAssertionProjection",
     "OperationalAssertionEstablishment",
