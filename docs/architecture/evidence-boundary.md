@@ -12,5 +12,9 @@ thresholds, rules, or algorithms.
 
 Evidence sits between operational observation and later product conclusions.
 
+The current internal domain artifact embodies Evidence using four approved semantic
+propositions: proposition, referent, source provenance, and temporal context.
+Canonical external representation remains deferred.
+
 Identity, representation, normalization, authority, admissibility, temporal semantics,
 sufficiency, conflicts, verdict semantics, evaluation, and provider mappings remain deferred.
