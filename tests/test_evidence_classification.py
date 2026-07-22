@@ -1,4 +1,5 @@
 from dataclasses import FrozenInstanceError
+from datetime import UTC, datetime
 
 import pytest
 
@@ -6,7 +7,7 @@ from latch.domain.admission import (
     EvidencePropositionClassification,
     EvidencePropositionClassificationAssociation,
 )
-from latch.domain.evidence import Evidence
+from latch.domain.evidence import Evidence, EvidenceInstant
 
 
 def make_evidence(proposition: str = "cpu activity was observed") -> Evidence:
@@ -14,7 +15,7 @@ def make_evidence(proposition: str = "cpu activity was observed") -> Evidence:
         proposition=proposition,
         referent="temporary-environment:env-123",
         source_provenance="cloudwatch metric query at 2026-07-23T10:00:00Z",
-        temporal_context="observed during retirement review window",
+        temporal_context=EvidenceInstant(datetime(2026, 7, 23, 10, 0, tzinfo=UTC)),
     )
 
 

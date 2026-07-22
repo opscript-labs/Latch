@@ -1,8 +1,11 @@
 from dataclasses import FrozenInstanceError
+from datetime import UTC, datetime
 
 import pytest
 
-from latch.domain.evidence import Evidence
+from latch.domain.evidence import Evidence, EvidenceInstant, EvidenceInterval, EvidenceTimeless
+
+TEMPORAL_CONTEXT = EvidenceInstant(datetime(2026, 7, 23, 10, 0, tzinfo=UTC))
 
 
 def test_evidence_constructs_with_required_semantic_members() -> None:
@@ -10,13 +13,13 @@ def test_evidence_constructs_with_required_semantic_members() -> None:
         proposition="cpu activity is below the approved retirement boundary",
         referent="temporary-environment:env-123",
         source_provenance="cloudwatch metric query at 2026-07-23T10:00:00Z",
-        temporal_context="observed during retirement review window",
+        temporal_context=TEMPORAL_CONTEXT,
     )
 
     assert evidence.proposition == "cpu activity is below the approved retirement boundary"
     assert evidence.referent == "temporary-environment:env-123"
     assert evidence.source_provenance == "cloudwatch metric query at 2026-07-23T10:00:00Z"
-    assert evidence.temporal_context == "observed during retirement review window"
+    assert evidence.temporal_context == TEMPORAL_CONTEXT
 
 
 @pytest.mark.parametrize(
@@ -28,8 +31,6 @@ def test_evidence_constructs_with_required_semantic_members() -> None:
         ("referent", " "),
         ("source_provenance", ""),
         ("source_provenance", " "),
-        ("temporal_context", ""),
-        ("temporal_context", " "),
     ],
 )
 def test_evidence_rejects_empty_semantic_members(
@@ -39,7 +40,7 @@ def test_evidence_rejects_empty_semantic_members(
         "proposition": "cpu activity is below the approved retirement boundary",
         "referent": "temporary-environment:env-123",
         "source_provenance": "cloudwatch metric query at 2026-07-23T10:00:00Z",
-        "temporal_context": "observed during retirement review window",
+        "temporal_context": TEMPORAL_CONTEXT,
     }
     values[member_name] = member_value
 
@@ -52,13 +53,13 @@ def test_evidence_is_equal_when_all_semantic_members_match() -> None:
         proposition="cpu activity is below the approved retirement boundary",
         referent="temporary-environment:env-123",
         source_provenance="cloudwatch metric query at 2026-07-23T10:00:00Z",
-        temporal_context="observed during retirement review window",
+        temporal_context=TEMPORAL_CONTEXT,
     )
     same_evidence = Evidence(
         proposition="cpu activity is below the approved retirement boundary",
         referent="temporary-environment:env-123",
         source_provenance="cloudwatch metric query at 2026-07-23T10:00:00Z",
-        temporal_context="observed during retirement review window",
+        temporal_context=TEMPORAL_CONTEXT,
     )
 
     assert evidence == same_evidence
@@ -71,7 +72,9 @@ def test_evidence_is_equal_when_all_semantic_members_match() -> None:
         ("proposition", "network traffic is below the approved retirement boundary"),
         ("referent", "temporary-environment:env-456"),
         ("source_provenance", "cloudwatch metric query at 2026-07-23T11:00:00Z"),
-        ("temporal_context", "observed during follow-up retirement review window"),
+        ("temporal_context", EvidenceInstant(datetime(2026, 7, 23, 11, 0, tzinfo=UTC))),
+        ("temporal_context", EvidenceInterval(TEMPORAL_CONTEXT.instant, TEMPORAL_CONTEXT.instant)),
+        ("temporal_context", EvidenceTimeless()),
     ],
 )
 def test_evidence_is_unequal_when_exactly_one_semantic_member_differs(
@@ -81,7 +84,7 @@ def test_evidence_is_unequal_when_exactly_one_semantic_member_differs(
         "proposition": "cpu activity is below the approved retirement boundary",
         "referent": "temporary-environment:env-123",
         "source_provenance": "cloudwatch metric query at 2026-07-23T10:00:00Z",
-        "temporal_context": "observed during retirement review window",
+        "temporal_context": TEMPORAL_CONTEXT,
     }
     changed_values = values.copy()
     changed_values[member_name] = member_value
@@ -98,8 +101,18 @@ def test_evidence_is_immutable() -> None:
         proposition="cpu activity is below the approved retirement boundary",
         referent="temporary-environment:env-123",
         source_provenance="cloudwatch metric query at 2026-07-23T10:00:00Z",
-        temporal_context="observed during retirement review window",
+        temporal_context=TEMPORAL_CONTEXT,
     )
 
     with pytest.raises(FrozenInstanceError):
         evidence.proposition = "network traffic is below the approved retirement boundary"
+
+
+def test_evidence_rejects_invalid_temporal_context() -> None:
+    with pytest.raises(ValueError, match="temporal_context"):
+        Evidence(
+            proposition="cpu activity is below the approved retirement boundary",
+            referent="temporary-environment:env-123",
+            source_provenance="cloudwatch metric query at 2026-07-23T10:00:00Z",
+            temporal_context="observed during retirement review window",
+        )

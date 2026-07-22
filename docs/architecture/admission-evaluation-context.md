@@ -9,8 +9,8 @@ evaluation time. Its identity is exclusively the tuple of those three contents;
 changing any one of them creates a distinct context.
 
 Retirement is the only recognized admission request in this slice. Evaluation time is
-preserved exactly as supplied and has no freshness, TTL, normalization, or temporal
-relevance behavior here.
+accepted as a timezone-aware datetime and normalized to UTC. It has no freshness, TTL,
+or temporal-relevance behavior here.
 
 Evidence participation, Evidence eligibility, authority, sufficiency, conflicts,
 verdict behavior, and admission evaluation remain deferred.
