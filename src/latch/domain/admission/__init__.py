@@ -45,6 +45,10 @@ from latch.domain.admission.operational_temporal_relationship import (
     OperationalTemporalRelationship,
     OperationalTemporalRelationshipOutcome,
 )
+from latch.domain.admission.owner_approval_participation import (
+    OwnerApprovalParticipation,
+    OwnerApprovalParticipationOutcome,
+)
 from latch.domain.admission.owner_retirement_approval import OwnerRetirementApproval
 from latch.domain.admission.relevance import is_evidence_relevant_to_context
 from latch.domain.admission.retirement_prerequisite_status import (
@@ -89,6 +93,8 @@ __all__ = [
     "OperationalRetirementReadinessOutcome",
     "OperationalTemporalRelationship",
     "OperationalTemporalRelationshipOutcome",
+    "OwnerApprovalParticipation",
+    "OwnerApprovalParticipationOutcome",
     "OwnerRetirementApproval",
     "RetirementPrerequisiteStatus",
     "RetirementPrerequisiteStatusOutcome",
