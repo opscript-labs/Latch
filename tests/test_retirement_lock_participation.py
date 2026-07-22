@@ -45,7 +45,7 @@ def make_context(
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api"},
+        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=evaluated_at,
@@ -170,7 +170,7 @@ def test_mismatched_lock_environment_is_rejected() -> None:
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api"},
+        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
         )
     )
 

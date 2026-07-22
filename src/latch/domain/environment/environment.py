@@ -1,6 +1,17 @@
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
+
+EC2_INSTANCE_ARN_PATTERN = re.compile(
+    r"^arn:"
+    r"(?P<partition>aws|aws-cn|aws-us-gov):"
+    r"ec2:"
+    r"(?P<region>[a-z]{2}(?:-gov)?-[a-z]+-\d):"
+    r"(?P<account_id>\d{12}):"
+    r"instance/"
+    r"(?P<instance_id>i-[0-9a-f]{8,17})$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +50,11 @@ class Environment:
         for resource_target_arn in self.resource_target_arns:
             if not resource_target_arn.strip():
                 raise ValueError("resource_target_arns must contain non-empty values")
+
+            if not EC2_INSTANCE_ARN_PATTERN.fullmatch(resource_target_arn):
+                raise ValueError(
+                    "resource_target_arns must contain valid EC2 instance ARNs"
+                )
 
         if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
             raise ValueError("created_at must be timezone-aware")

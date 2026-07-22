@@ -8,13 +8,13 @@ CREATED_AT = datetime(2026, 7, 22, 10, 0, tzinfo=UTC)
 TTL_EXPIRES_AT = CREATED_AT + timedelta(hours=2)
 RESOURCE_TARGET_ARNS = frozenset(
     {
-        "arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api",
-        "arn:aws:dynamodb:us-east-1:123456789012:table/temp-api",
+        "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0",
+        "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba9876543210",
     }
 )
 
 
-def test_environment_constructs_with_valid_lifecycle_fields() -> None:
+def test_environment_accepts_valid_ec2_instance_arn_targets() -> None:
     environment = Environment(
         identifier="env-123",
         created_at=CREATED_AT,
@@ -77,6 +77,75 @@ def test_environment_rejects_empty_resource_target_values(
         )
 
 
+@pytest.mark.parametrize(
+    "resource_target_arn",
+    [
+        "not-an-arn",
+        "arn:aws:ec2:us-east-1:123456789012",
+        "arn:aws:ec2:us-east-1:123456789012:instance",
+    ],
+)
+def test_environment_rejects_invalid_arn_syntax(resource_target_arn: str) -> None:
+    with pytest.raises(ValueError, match="EC2 instance ARNs"):
+        Environment(
+            identifier="env-123",
+            created_at=CREATED_AT,
+            ttl_expires_at=TTL_EXPIRES_AT,
+            owner="team-platform",
+            resource_target_arns={resource_target_arn},
+        )
+
+
+def test_environment_rejects_non_ec2_service_arns() -> None:
+    with pytest.raises(ValueError, match="EC2 instance ARNs"):
+        Environment(
+            identifier="env-123",
+            created_at=CREATED_AT,
+            ttl_expires_at=TTL_EXPIRES_AT,
+            owner="team-platform",
+            resource_target_arns={
+                "arn:aws:s3:us-east-1:123456789012:instance/i-0123456789abcdef0"
+            },
+        )
+
+
+def test_environment_rejects_non_instance_ec2_resource_arns() -> None:
+    with pytest.raises(ValueError, match="EC2 instance ARNs"):
+        Environment(
+            identifier="env-123",
+            created_at=CREATED_AT,
+            ttl_expires_at=TTL_EXPIRES_AT,
+            owner="team-platform",
+            resource_target_arns={
+                "arn:aws:ec2:us-east-1:123456789012:volume/vol-0123456789abcdef0"
+            },
+        )
+
+
+@pytest.mark.parametrize(
+    "resource_target_arn",
+    [
+        "arn:aws:ec2::123456789012:instance/i-0123456789abcdef0",
+        "arn:aws:ec2:useast1:123456789012:instance/i-0123456789abcdef0",
+        "arn:aws:ec2:us-east-1::instance/i-0123456789abcdef0",
+        "arn:aws:ec2:us-east-1:12345678901:instance/i-0123456789abcdef0",
+        "arn:aws:ec2:us-east-1:123456789012:instance/",
+        "arn:aws:ec2:us-east-1:123456789012:instance/not-an-instance-id",
+    ],
+)
+def test_environment_rejects_missing_or_malformed_ec2_arn_parts(
+    resource_target_arn: str,
+) -> None:
+    with pytest.raises(ValueError, match="EC2 instance ARNs"):
+        Environment(
+            identifier="env-123",
+            created_at=CREATED_AT,
+            ttl_expires_at=TTL_EXPIRES_AT,
+            owner="team-platform",
+            resource_target_arns={resource_target_arn},
+        )
+
+
 def test_environment_duplicate_targets_collapse() -> None:
     environment = Environment(
         identifier="env-123",
@@ -84,13 +153,13 @@ def test_environment_duplicate_targets_collapse() -> None:
         ttl_expires_at=TTL_EXPIRES_AT,
         owner="team-platform",
         resource_target_arns=[
-            "arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api",
-            "arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api",
+            "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0",
+            "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0",
         ],
     )
 
     assert environment.resource_target_arns == frozenset(
-        {"arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api"}
+        {"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"}
     )
 
 
@@ -101,8 +170,8 @@ def test_environment_target_order_does_not_affect_equality_or_hashing() -> None:
         ttl_expires_at=TTL_EXPIRES_AT,
         owner="team-platform",
         resource_target_arns=[
-            "arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api",
-            "arn:aws:dynamodb:us-east-1:123456789012:table/temp-api",
+            "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0",
+            "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba9876543210",
         ],
     )
     second = Environment(
@@ -111,8 +180,8 @@ def test_environment_target_order_does_not_affect_equality_or_hashing() -> None:
         ttl_expires_at=TTL_EXPIRES_AT,
         owner="team-platform",
         resource_target_arns=[
-            "arn:aws:dynamodb:us-east-1:123456789012:table/temp-api",
-            "arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api",
+            "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba9876543210",
+            "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0",
         ],
     )
 
@@ -127,7 +196,7 @@ def test_changed_target_membership_creates_distinct_environment_identity() -> No
         ttl_expires_at=TTL_EXPIRES_AT,
         owner="team-platform",
         resource_target_arns={
-            "arn:aws:ecs:us-east-1:123456789012:service/demo/temp-api"
+            "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
         },
     )
     second = Environment(
@@ -136,7 +205,7 @@ def test_changed_target_membership_creates_distinct_environment_identity() -> No
         ttl_expires_at=TTL_EXPIRES_AT,
         owner="team-platform",
         resource_target_arns={
-            "arn:aws:dynamodb:us-east-1:123456789012:table/temp-api"
+            "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba9876543210"
         },
     )
 
@@ -154,7 +223,7 @@ def test_environment_targets_are_immutable() -> None:
 
     with pytest.raises(AttributeError):
         environment.resource_target_arns.add(
-            "arn:aws:s3:::temporary-environment-artifacts"
+            "arn:aws:ec2:us-east-1:123456789012:instance/i-11111111111111111"
         )
 
 
