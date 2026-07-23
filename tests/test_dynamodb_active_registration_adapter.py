@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta, timezone
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from botocore.exceptions import ClientError
@@ -58,6 +58,13 @@ def conditional_failure() -> ClientError:
             }
         },
         "PutItem",
+    )
+
+
+def service_failure() -> ClientError:
+    return ClientError(
+        {"Error": {"Code": "InternalServerError", "Message": "service unavailable"}},
+        "UpdateItem",
     )
 
 
@@ -148,6 +155,133 @@ def test_duplicate_creation_propagates_conditional_failure_without_overwrite() -
 
     assert raised.value is error
     client.put_item.assert_called_once()
+
+
+def test_successful_due_claim_returns_claim_and_writes_metadata() -> None:
+    client = Mock()
+    claim_time = datetime(
+        2026,
+        7,
+        23,
+        15,
+        30,
+        tzinfo=timezone(timedelta(hours=5, minutes=30)),
+    )
+
+    with patch(
+        "latch.domain.environment.retirement_evaluation_claim.uuid.uuid4",
+        return_value="claim-token",
+    ):
+        claim = DynamoDBActiveRegistrationAdapter(
+            client,
+            "active-environments",
+        ).acquire_retirement_evaluation_claim(make_environment(), claim_time)
+
+    assert claim is not None
+    assert claim.claim_token == "claim-token"
+    assert claim.claim_time == TTL_EXPIRES_AT
+    client.update_item.assert_called_once()
+    assert client.update_item.call_args.kwargs["UpdateExpression"] == (
+        "SET evaluation_claim_token = :evaluation_claim_token, "
+        "evaluation_claim_time = :evaluation_claim_time"
+    )
+    assert client.update_item.call_args.kwargs["ExpressionAttributeValues"][
+        ":evaluation_claim_token"
+    ] == {"S": "claim-token"}
+    assert client.update_item.call_args.kwargs["ExpressionAttributeValues"][
+        ":evaluation_claim_time"
+    ] == {"S": "2026-07-23T10:00:00.000000Z"}
+
+
+def test_exact_ttl_expiry_can_be_claimed() -> None:
+    client = Mock()
+
+    claim = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).acquire_retirement_evaluation_claim(make_environment(), TTL_EXPIRES_AT)
+
+    assert claim is not None
+    assert client.update_item.call_args.kwargs["ExpressionAttributeValues"][
+        ":evaluation_claim_time"
+    ] == {"S": "2026-07-23T10:00:00.000000Z"}
+
+
+@pytest.mark.parametrize(
+    "failure_reason",
+    [
+        "not-yet-due",
+        "fingerprint-mismatch",
+        "existing-claim-token",
+        "concurrent-second-acquisition",
+    ],
+)
+def test_conditional_claim_failure_returns_no_claim(failure_reason: str) -> None:
+    client = Mock()
+    client.update_item.side_effect = conditional_failure()
+
+    claim = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).acquire_retirement_evaluation_claim(make_environment(), TTL_EXPIRES_AT)
+
+    assert claim is None
+    client.update_item.assert_called_once()
+    client.get_item.assert_not_called()
+    client.put_item.assert_not_called()
+    client.delete_item.assert_not_called()
+    assert failure_reason
+
+
+def test_claim_condition_includes_identifier_fingerprint_absence_and_ttl() -> None:
+    client = Mock()
+    environment = make_environment()
+
+    DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).acquire_retirement_evaluation_claim(environment, TTL_EXPIRES_AT)
+
+    update_kwargs = client.update_item.call_args.kwargs
+    assert update_kwargs["Key"] == {"identifier": {"S": "env-123"}}
+    assert update_kwargs["ConditionExpression"] == (
+        "identifier = :identifier AND "
+        "registration_fingerprint = :registration_fingerprint AND "
+        "attribute_not_exists(evaluation_claim_token) AND "
+        "ttl_expires_at <= :evaluation_claim_time"
+    )
+    assert update_kwargs["ExpressionAttributeValues"][":identifier"] == {"S": "env-123"}
+    assert update_kwargs["ExpressionAttributeValues"][":registration_fingerprint"] == {
+        "S": immutable_registration_fingerprint(environment)
+    }
+
+
+def test_non_conditional_claim_failure_propagates_unchanged() -> None:
+    client = Mock()
+    error = service_failure()
+    client.update_item.side_effect = error
+
+    with pytest.raises(ClientError) as raised:
+        DynamoDBActiveRegistrationAdapter(
+            client,
+            "active-environments",
+        ).acquire_retirement_evaluation_claim(make_environment(), TTL_EXPIRES_AT)
+
+    assert raised.value is error
+
+
+def test_claim_acquisition_does_not_mutate_environment_input() -> None:
+    client = Mock()
+    environment = make_environment()
+    targets = environment.resource_target_arns
+
+    DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).acquire_retirement_evaluation_claim(environment, TTL_EXPIRES_AT)
+
+    assert environment.resource_target_arns == targets
+    assert environment.ttl_expires_at == TTL_EXPIRES_AT
 
 
 def test_confirmed_matching_destruction_performs_conditional_delete() -> None:

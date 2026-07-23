@@ -3,7 +3,10 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
+
 from latch.domain.environment import Environment
+from latch.domain.environment.retirement_evaluation_claim import RetirementEvaluationClaim
 from latch.domain.execution import (
     EC2DestructionConfirmation,
     EC2DestructionConfirmationOutcome,
@@ -29,6 +32,46 @@ class DynamoDBActiveRegistrationAdapter:
             Item=_item_for_environment(environment),
             ConditionExpression="attribute_not_exists(identifier)",
         )
+
+    def acquire_retirement_evaluation_claim(
+        self,
+        environment: Environment,
+        claim_time: datetime,
+    ) -> RetirementEvaluationClaim | None:
+        if not isinstance(environment, Environment):
+            raise ValueError("environment must be an Environment")
+
+        claim = RetirementEvaluationClaim(environment=environment, claim_time=claim_time)
+        try:
+            self._dynamodb_client.update_item(
+                TableName=self._table_name,
+                Key={"identifier": {"S": environment.identifier}},
+                UpdateExpression=(
+                    "SET evaluation_claim_token = :evaluation_claim_token, "
+                    "evaluation_claim_time = :evaluation_claim_time"
+                ),
+                ConditionExpression=(
+                    "identifier = :identifier AND "
+                    "registration_fingerprint = :registration_fingerprint AND "
+                    "attribute_not_exists(evaluation_claim_token) AND "
+                    "ttl_expires_at <= :evaluation_claim_time"
+                ),
+                ExpressionAttributeValues={
+                    ":identifier": {"S": environment.identifier},
+                    ":registration_fingerprint": {
+                        "S": immutable_registration_fingerprint(environment)
+                    },
+                    ":evaluation_claim_token": {"S": claim.claim_token},
+                    ":evaluation_claim_time": {"S": canonical_registration_timestamp(claim_time)},
+                },
+            )
+        except ClientError as error:
+            error_code = error.response.get("Error", {}).get("Code")
+            if error_code == "ConditionalCheckFailedException":
+                return None
+            raise
+
+        return claim
 
     def deregister_confirmed(self, confirmation: EC2DestructionConfirmation) -> None:
         if not isinstance(confirmation, EC2DestructionConfirmation):
