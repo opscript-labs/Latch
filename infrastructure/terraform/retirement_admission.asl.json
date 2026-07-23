@@ -87,8 +87,7 @@
       "Type": "Pass",
       "Parameters": {
         "status": "failed",
-        "error.$": "$.error",
-        "claim_token.$": "$.claim_token"
+        "error.$": "$.error"
       },
       "Next": "TerminalInvocationFailed"
     },
@@ -96,8 +95,7 @@
       "Type": "Pass",
       "Parameters": {
         "status": "failed",
-        "error": "Invocation failure",
-        "claim_token.$": "$.claim_token"
+        "error": "Invocation failure"
       },
       "Next": "TerminalInvocationFailed"
     },
@@ -105,8 +103,7 @@
       "Type": "Pass",
       "Parameters": {
         "status": "failed",
-        "error": "Malformed result shape",
-        "claim_token.$": "$.claim_token"
+        "error": "Malformed result shape"
       },
       "Next": "TerminalInvocationFailed"
     },
