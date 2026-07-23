@@ -1,1 +1,1 @@
-# Providers will be configured in later milestones.
+provider "aws" {}

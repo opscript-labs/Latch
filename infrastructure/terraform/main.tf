@@ -1,1 +1,1 @@
-# Infrastructure resources will be added in later milestones.
+# Resources are defined in iam.tf and lambda.tf.

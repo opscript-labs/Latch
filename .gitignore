@@ -20,3 +20,6 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+dist/
+.build_staging_retirement_admission/
