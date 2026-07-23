@@ -95,14 +95,24 @@ class DynamoDBActiveRegistrationAdapter:
 
         return claim
 
-    def deregister_confirmed(self, confirmation: EC2DestructionConfirmation) -> None:
+    def deregister_confirmed(
+        self,
+        claim: RetirementEvaluationClaim,
+        confirmation: EC2DestructionConfirmation,
+    ) -> None:
+        if not isinstance(claim, RetirementEvaluationClaim):
+            raise ValueError("claim must be a RetirementEvaluationClaim")
+
         if not isinstance(confirmation, EC2DestructionConfirmation):
             raise ValueError("confirmation must be an EC2DestructionConfirmation")
+
+        if confirmation.environment != claim.environment:
+            raise ValueError("confirmation Environment must match claim")
 
         if confirmation.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED:
             return
 
-        environment = confirmation.environment
+        environment = claim.environment
         self._dynamodb_client.transact_write_items(
             TransactItems=[
                 {
@@ -110,12 +120,20 @@ class DynamoDBActiveRegistrationAdapter:
                         "TableName": self._table_name,
                         "Key": {"identifier": {"S": environment.identifier}},
                         "ConditionExpression": (
-                            "registration_fingerprint = :registration_fingerprint"
+                            "identifier = :identifier AND "
+                            "registration_fingerprint = :registration_fingerprint AND "
+                            "evaluation_claim_token = :evaluation_claim_token AND "
+                            "evaluation_claim_time = :evaluation_claim_time"
                         ),
                         "ExpressionAttributeValues": {
+                            ":identifier": {"S": environment.identifier},
                             ":registration_fingerprint": {
                                 "S": immutable_registration_fingerprint(environment)
-                            }
+                            },
+                            ":evaluation_claim_token": {"S": claim.claim_token},
+                            ":evaluation_claim_time": {
+                                "S": canonical_registration_timestamp(claim.claim_time)
+                            },
                         },
                     }
                 },
