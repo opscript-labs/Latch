@@ -63,9 +63,12 @@ class RetirementAdmissionAdapter:
 
         verdict_obj = self._evaluator.evaluate(claim)
 
-        verdict_value = verdict_obj.verdict.value if verdict_obj is not None else None
+        if verdict_obj is None:
+            return {
+                "claim_token": claim.claim_token,
+            }
 
         return {
-            "verdict": verdict_value,
+            "verdict": verdict_obj.verdict.value,
             "claim_token": claim.claim_token,
         }

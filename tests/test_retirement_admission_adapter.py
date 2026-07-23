@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -36,10 +37,6 @@ def valid_payload() -> dict[str, Any]:
 
 
 def make_mock_verdict(verdict_enum: AdmissionVerdict) -> Any:
-    # We construct a stub verdict object with a mocked lock_participation
-    # because the domain verdict has a post_init validation that requires
-    # lock_participation to be a RetirementLockParticipation
-    from unittest.mock import Mock
     mock_verdict = Mock(spec=RetirementAdmissionVerdict)
     mock_verdict.verdict = verdict_enum
     return mock_verdict
@@ -86,16 +83,18 @@ def test_verdict_values_are_serialized_correctly(
 
     result = adapter.handle(valid_payload)
     assert result["verdict"] == expected_str
+    assert "verdict" in result
 
 
-def test_evaluator_returning_none_serializes_verdict_as_none(
+def test_evaluator_returning_none_omits_verdict_key_and_no_null_verdict(
     valid_payload: dict[str, Any]
 ) -> None:
     evaluator = MockEvaluator(None)
     adapter = RetirementAdmissionAdapter(evaluator)
 
     result = adapter.handle(valid_payload)
-    assert result["verdict"] is None
+    assert "verdict" not in result
+    assert "claim_token" in result
 
 
 @pytest.mark.parametrize(
@@ -106,7 +105,7 @@ def test_evaluator_returning_none_serializes_verdict_as_none(
         "claim_time",
     ],
 )
-def test_missing_root_fields_fail_closed(
+def test_missing_root_fields_fail_closed_without_calling_evaluator(
     valid_payload: dict[str, Any], missing_field: str
 ) -> None:
     evaluator = MockEvaluator()
@@ -129,7 +128,7 @@ def test_missing_root_fields_fail_closed(
         "resource_target_arns",
     ],
 )
-def test_missing_environment_fields_fail_closed(
+def test_missing_environment_fields_fail_closed_without_calling_evaluator(
     valid_payload: dict[str, Any], missing_env_field: str
 ) -> None:
     evaluator = MockEvaluator()
@@ -147,7 +146,7 @@ def test_missing_environment_fields_fail_closed(
     [
         ("version", "2"),
         ("claim_time", "not-a-datetime"),
-        ("claim_time", "2026-07-23T10:00:00"),  # missing timezone
+        ("claim_time", "2026-07-23T10:00:00"),
     ],
 )
 def test_invalid_root_field_values_fail_closed(
@@ -167,9 +166,9 @@ def test_invalid_root_field_values_fail_closed(
     "invalid_key,invalid_value",
     [
         ("created_at", "not-a-datetime"),
-        ("created_at", "2026-07-23T08:00:00"),  # missing timezone
-        ("resource_target_arns", []),  # empty targets
-        ("resource_target_arns", ["not-an-arn"]),  # invalid ARN
+        ("created_at", "2026-07-23T08:00:00"),
+        ("resource_target_arns", []),
+        ("resource_target_arns", ["not-an-arn"]),
     ],
 )
 def test_invalid_env_field_values_fail_closed(
