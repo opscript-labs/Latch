@@ -1,0 +1,153 @@
+{
+  "Comment": "Orchestrates Latch Retirement Admission Decisions",
+  "StartAt": "InvokeRetirementAdmissionLambda",
+  "States": {
+    "InvokeRetirementAdmissionLambda": {
+      "Type": "Task",
+      "Resource": "${RetirementAdmissionLambdaArn}",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.invocation_error",
+          "Next": "HandleInvocationFailure"
+        }
+      ],
+      "Next": "EvaluateLambdaResult"
+    },
+    "EvaluateLambdaResult": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.error",
+              "IsPresent": true
+            }
+          ],
+          "Next": "HandleExplicitError"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.verdict",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.verdict",
+              "StringEquals": "safe"
+            }
+          ],
+          "Next": "TerminalSafe"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.verdict",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.verdict",
+              "StringEquals": "unsafe"
+            }
+          ],
+          "Next": "TerminalUnsafe"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.verdict",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.verdict",
+              "StringEquals": "insufficient"
+            }
+          ],
+          "Next": "TerminalInsufficient"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.claim_token",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.verdict",
+              "IsPresent": false
+            }
+          ],
+          "Next": "TerminalEvaluationRejected"
+        }
+      ],
+      "Default": "HandleMalformedResult"
+    },
+    "HandleExplicitError": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "failed",
+        "error.$": "$.error",
+        "claim_token.$": "$.claim_token"
+      },
+      "Next": "TerminalInvocationFailed"
+    },
+    "HandleInvocationFailure": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "failed",
+        "error": "Invocation failure",
+        "claim_token.$": "$.claim_token"
+      },
+      "Next": "TerminalInvocationFailed"
+    },
+    "HandleMalformedResult": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "failed",
+        "error": "Malformed result shape",
+        "claim_token.$": "$.claim_token"
+      },
+      "Next": "TerminalInvocationFailed"
+    },
+    "TerminalSafe": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "evaluated",
+        "verdict": "safe",
+        "claim_token.$": "$.claim_token"
+      },
+      "End": true
+    },
+    "TerminalUnsafe": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "evaluated",
+        "verdict": "unsafe",
+        "claim_token.$": "$.claim_token"
+      },
+      "End": true
+    },
+    "TerminalInsufficient": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "evaluated",
+        "verdict": "insufficient",
+        "claim_token.$": "$.claim_token"
+      },
+      "End": true
+    },
+    "TerminalEvaluationRejected": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "rejected",
+        "claim_token.$": "$.claim_token"
+      },
+      "End": true
+    },
+    "TerminalInvocationFailed": {
+      "Type": "Pass",
+      "End": true
+    }
+  }
+}
