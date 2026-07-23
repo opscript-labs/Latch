@@ -30,3 +30,9 @@ variable "lambda_memory_size" {
   description = "The memory allocation size for the Lambda function."
   default     = 256
 }
+
+variable "state_machine_name" {
+  type        = string
+  description = "The name of the Step Functions state machine."
+  default     = "latch-retirement-admission-workflow"
+}

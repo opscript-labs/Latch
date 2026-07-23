@@ -17,3 +17,18 @@ output "lambda_role_arn" {
   value       = aws_iam_role.lambda_exec.arn
   description = "The ARN of the Lambda IAM execution role."
 }
+
+output "retirement_admission_state_machine_name" {
+  value       = aws_sfn_state_machine.retirement_admission.name
+  description = "The name of the Step Functions state machine."
+}
+
+output "retirement_admission_state_machine_arn" {
+  value       = aws_sfn_state_machine.retirement_admission.arn
+  description = "The ARN of the Step Functions state machine."
+}
+
+output "retirement_admission_state_machine_role_arn" {
+  value       = aws_iam_role.sfn_exec.arn
+  description = "The ARN of the Step Functions IAM execution role."
+}
