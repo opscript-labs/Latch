@@ -42,6 +42,17 @@ class DynamoDBActiveClaimValidator:
 
         return ActiveClaimValidationResult.INVALID_ACTIVE_CLAIM
 
+    def get_authoritative_owner(self, identifier: str) -> str | None:
+        response = self._dynamodb_client.get_item(
+            TableName=self._table_name,
+            Key={"identifier": {"S": identifier}},
+            ConsistentRead=True,
+        )
+        item = response.get("Item")
+        if not isinstance(item, dict):
+            return None
+        return _item_string(item, "owner")
+
 
 def _item_matches_claim(
     item: dict[str, Any],

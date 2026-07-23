@@ -77,7 +77,10 @@ def _build_handler(
     )
 
     adapter = RetirementAdmissionAdapter(coordinator)
-    return create_lambda_handler(adapter)
+    return create_lambda_handler(
+        adapter,
+        default_producer_authority="RetirementAdmissionRequestProducer",
+    )
 
 
 _cached_handler: Callable[[dict[str, Any], Any], dict[str, Any]] | None = None

@@ -9,6 +9,7 @@ logger = logging.getLogger("latch.retirement_admission_lambda")
 
 def create_lambda_handler(
     adapter: RetirementAdmissionAdapter,
+    default_producer_authority: str | None = None,
 ) -> Callable[[dict[str, Any], Any], dict[str, Any]]:
     """Creates a Lambda handler that delegates to the RetirementAdmissionAdapter."""
     if not isinstance(adapter, RetirementAdmissionAdapter):
@@ -20,7 +21,7 @@ def create_lambda_handler(
             return {"error": "Malformed transport payload"}
 
         try:
-            return adapter.handle(event)
+            return adapter.handle(event, producer_authority=default_producer_authority)
         except ValueError as error:
             logger.error(f"Transport validation error: {error}")
             return {"error": "Malformed transport payload"}

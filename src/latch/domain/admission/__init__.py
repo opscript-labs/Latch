@@ -55,6 +55,10 @@ from latch.domain.admission.registered_target_operational_evidence_coverage impo
     RegisteredTargetOperationalEvidenceCoverageOutcome,
 )
 from latch.domain.admission.relevance import is_evidence_relevant_to_context
+from latch.domain.admission.retirement_admission_request import (
+    RetirementAdmissionRequest,
+    RetirementAdmissionRequested,
+)
 from latch.domain.admission.retirement_admission_verdict import (
     RetirementAdmissionVerdict,
 )
@@ -121,4 +125,6 @@ __all__ = [
     "SourceStandingOutcome",
     "determine_source_standing",
     "is_evidence_relevant_to_context",
+    "RetirementAdmissionRequest",
+    "RetirementAdmissionRequested",
 ]

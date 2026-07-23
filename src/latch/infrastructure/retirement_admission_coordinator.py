@@ -32,9 +32,25 @@ class RetirementAdmissionCoordinator:
     def evaluate(
         self,
         claim: RetirementEvaluationClaim,
+        claimant_identity: str | None = None,
     ) -> RetirementAdmissionVerdict | None:
         if not isinstance(claim, RetirementEvaluationClaim):
             raise ValueError("claim must be a RetirementEvaluationClaim")
+
+        # Authoritative claimant validation against the registered database owner
+        if claimant_identity is not None:
+            if (
+                not isinstance(claimant_identity, str)
+                or not claimant_identity.strip()
+            ):
+                raise ValueError("claimant_identity must be a non-empty string")
+            db_owner = self._active_claim_validator.get_authoritative_owner(
+                claim.environment.identifier
+            )
+            if db_owner is not None and claimant_identity != db_owner:
+                raise ValueError(
+                    "Claimant identity does not match authoritative registered owner"
+                )
 
         if (
             self._active_claim_validator.validate(claim)

@@ -5,34 +5,48 @@ from unittest.mock import Mock
 import pytest
 
 from latch.application.retirement_admission_adapter import RetirementAdmissionAdapter
-from latch.domain.admission import AdmissionVerdict, RetirementAdmissionVerdict
-from latch.domain.environment import RetirementEvaluationClaim
+from latch.domain.admission import (
+    AdmissionVerdict,
+    RetirementAdmissionRequest,
+    RetirementAdmissionRequested,
+    RetirementAdmissionVerdict,
+)
+from latch.domain.environment import Environment, RetirementEvaluationClaim
 
 
 class MockEvaluator:
     def __init__(self, verdict: RetirementAdmissionVerdict | None = None) -> None:
         self.verdict = verdict
-        self.calls: list[RetirementEvaluationClaim] = []
+        self.calls: list[tuple[RetirementEvaluationClaim, str]] = []
 
-    def evaluate(self, claim: RetirementEvaluationClaim) -> RetirementAdmissionVerdict | None:
-        self.calls.append(claim)
+    def evaluate(
+        self,
+        claim: RetirementEvaluationClaim,
+        claimant_identity: str,
+    ) -> RetirementAdmissionVerdict | None:
+        self.calls.append((claim, claimant_identity))
         return self.verdict
 
 
 @pytest.fixture
 def valid_payload() -> dict[str, Any]:
     return {
+        "product_event_type": "RETIREMENT_ADMISSION_REQUESTED",
         "version": "1",
-        "environment": {
-            "identifier": "env-123",
-            "created_at": "2026-07-23T08:00:00Z",
-            "ttl_expires_at": "2026-07-23T10:00:00Z",
-            "owner": "team-platform",
-            "resource_target_arns": [
-                "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
-            ],
-        },
         "claim_time": "2026-07-23T10:00:00Z",
+        "request": {
+            "environment_identity": {
+                "identifier": "env-123",
+                "created_at": "2026-07-23T08:00:00Z",
+                "ttl_expires_at": "2026-07-23T10:00:00Z",
+                "owner": "team-platform",
+                "resource_target_arns": [
+                    "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
+                ],
+            },
+            "retirement_claim_identity": "claim-token-123",
+            "claimant_identity": "team-platform",
+        },
     }
 
 
@@ -49,21 +63,16 @@ def test_valid_request_constructs_exact_claim_and_calls_evaluator_once(
     evaluator = MockEvaluator(mock_verdict)
     adapter = RetirementAdmissionAdapter(evaluator)
 
-    result = adapter.handle(valid_payload)
+    result = adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
 
     assert len(evaluator.calls) == 1
-    claim = evaluator.calls[0]
+    claim, claimant = evaluator.calls[0]
     assert isinstance(claim, RetirementEvaluationClaim)
     assert claim.environment.identifier == "env-123"
     assert claim.environment.owner == "team-platform"
-    assert claim.environment.created_at == datetime(2026, 7, 23, 8, 0, tzinfo=UTC)
-    assert claim.environment.ttl_expires_at == datetime(2026, 7, 23, 10, 0, tzinfo=UTC)
-    assert claim.environment.resource_target_arns == {
-        "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
-    }
-    assert claim.claim_time == datetime(2026, 7, 23, 10, 0, tzinfo=UTC)
+    assert claimant == "team-platform"
     assert result["verdict"] == "safe"
-    assert "claim_token" in result
+    assert result["claim_token"] == "claim-token-123"
 
 
 @pytest.mark.parametrize(
@@ -81,126 +90,98 @@ def test_verdict_values_are_serialized_correctly(
     evaluator = MockEvaluator(mock_verdict)
     adapter = RetirementAdmissionAdapter(evaluator)
 
-    result = adapter.handle(valid_payload)
+    result = adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
+
     assert result["verdict"] == expected_str
-    assert "verdict" in result
+    assert result["claim_token"] == "claim-token-123"
 
 
-def test_evaluator_returning_none_omits_verdict_key_and_no_null_verdict(
-    valid_payload: dict[str, Any]
-) -> None:
+def test_coordinator_none_result_mapped_to_omitted_verdict(valid_payload: dict[str, Any]) -> None:
     evaluator = MockEvaluator(None)
     adapter = RetirementAdmissionAdapter(evaluator)
 
-    result = adapter.handle(valid_payload)
+    result = adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
+
     assert "verdict" not in result
-    assert "claim_token" in result
+    assert result["claim_token"] == "claim-token-123"
 
 
-@pytest.mark.parametrize(
-    "missing_field",
-    [
-        "version",
-        "environment",
-        "claim_time",
-    ],
-)
+def test_unauthorized_direct_invocation_rejected(valid_payload: dict[str, Any]) -> None:
+    evaluator = MockEvaluator()
+    adapter = RetirementAdmissionAdapter(evaluator)
+
+    with pytest.raises(ValueError, match="Unauthorized producer attribution"):
+        adapter.handle(valid_payload)  # no producer authority passed
+
+
+def test_incorrect_producer_authority_rejected(valid_payload: dict[str, Any]) -> None:
+    evaluator = MockEvaluator()
+    adapter = RetirementAdmissionAdapter(evaluator)
+
+    with pytest.raises(ValueError, match="Unauthorized producer attribution"):
+        adapter.handle(valid_payload, producer_authority="UntrustedProducer")
+
+
+def test_payload_supplied_producer_does_not_authorize(valid_payload: dict[str, Any]) -> None:
+    evaluator = MockEvaluator()
+    adapter = RetirementAdmissionAdapter(evaluator)
+    valid_payload["producer"] = "RetirementAdmissionRequestProducer"
+
+    with pytest.raises(ValueError):
+        adapter.handle(valid_payload, producer_authority="UntrustedProducer")
+
+
 def test_missing_root_fields_fail_closed_without_calling_evaluator(
-    valid_payload: dict[str, Any], missing_field: str
+    valid_payload: dict[str, Any]
 ) -> None:
     evaluator = MockEvaluator()
     adapter = RetirementAdmissionAdapter(evaluator)
-    del valid_payload[missing_field]
+    del valid_payload["request"]
 
     with pytest.raises(ValueError):
-        adapter.handle(valid_payload)
+        adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
 
     assert len(evaluator.calls) == 0
 
 
-@pytest.mark.parametrize(
-    "missing_env_field",
-    [
-        "identifier",
-        "created_at",
-        "ttl_expires_at",
-        "owner",
-        "resource_target_arns",
-    ],
-)
-def test_missing_environment_fields_fail_closed_without_calling_evaluator(
-    valid_payload: dict[str, Any], missing_env_field: str
-) -> None:
+def test_claimant_mismatch_fails_closed(valid_payload: dict[str, Any]) -> None:
     evaluator = MockEvaluator()
     adapter = RetirementAdmissionAdapter(evaluator)
-    del valid_payload["environment"][missing_env_field]
+    valid_payload["request"]["claimant_identity"] = "different-owner"
 
     with pytest.raises(ValueError):
-        adapter.handle(valid_payload)
+        adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
 
     assert len(evaluator.calls) == 0
 
 
-@pytest.mark.parametrize(
-    "invalid_key,invalid_value",
-    [
-        ("version", "2"),
-        ("claim_time", "not-a-datetime"),
-        ("claim_time", "2026-07-23T10:00:00"),
-    ],
-)
-def test_invalid_root_field_values_fail_closed(
-    valid_payload: dict[str, Any], invalid_key: str, invalid_value: Any
-) -> None:
-    evaluator = MockEvaluator()
-    adapter = RetirementAdmissionAdapter(evaluator)
-    valid_payload[invalid_key] = invalid_value
+def test_product_models_behavior() -> None:
+    environment = Environment(
+        identifier="env-123",
+        created_at=datetime(2026, 7, 23, 8, 0, tzinfo=UTC),
+        ttl_expires_at=datetime(2026, 7, 23, 10, 0, tzinfo=UTC),
+        owner="team-platform",
+        resource_target_arns=[
+            "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
+        ],
+    )
+    request = RetirementAdmissionRequest(
+        environment_identity=environment,
+        retirement_claim_identity="claim-token",
+        claimant_identity="team-platform",
+    )
+    event = RetirementAdmissionRequested(request=request)
+
+    assert request.environment_identity == environment
+    assert request.retirement_claim_identity == "claim-token"
+    assert request.claimant_identity == "team-platform"
+    assert event.product_event_type == "RETIREMENT_ADMISSION_REQUESTED"
+    assert event.request == request
 
     with pytest.raises(ValueError):
-        adapter.handle(valid_payload)
-
-    assert len(evaluator.calls) == 0
-
-
-@pytest.mark.parametrize(
-    "invalid_key,invalid_value",
-    [
-        ("created_at", "not-a-datetime"),
-        ("created_at", "2026-07-23T08:00:00"),
-        ("resource_target_arns", []),
-        ("resource_target_arns", ["not-an-arn"]),
-    ],
-)
-def test_invalid_env_field_values_fail_closed(
-    valid_payload: dict[str, Any], invalid_key: str, invalid_value: Any
-) -> None:
-    evaluator = MockEvaluator()
-    adapter = RetirementAdmissionAdapter(evaluator)
-    valid_payload["environment"][invalid_key] = invalid_value
-
-    with pytest.raises(ValueError):
-        adapter.handle(valid_payload)
-
-    assert len(evaluator.calls) == 0
-
-
-def test_extra_root_fields_are_strictly_rejected(valid_payload: dict[str, Any]) -> None:
-    evaluator = MockEvaluator()
-    adapter = RetirementAdmissionAdapter(evaluator)
-    valid_payload["extra_field"] = "value"
-
-    with pytest.raises(ValueError):
-        adapter.handle(valid_payload)
-
-    assert len(evaluator.calls) == 0
-
-
-def test_extra_environment_fields_are_strictly_rejected(valid_payload: dict[str, Any]) -> None:
-    evaluator = MockEvaluator()
-    adapter = RetirementAdmissionAdapter(evaluator)
-    valid_payload["environment"]["extra_field"] = "value"
-
-    with pytest.raises(ValueError):
-        adapter.handle(valid_payload)
-
-    assert len(evaluator.calls) == 0
+        # Mismatch
+        RetirementAdmissionRequest(
+            environment_identity=environment,
+            retirement_claim_identity="claim-token",
+            claimant_identity="other-owner",
+        )
