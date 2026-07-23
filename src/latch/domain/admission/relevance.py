@@ -16,7 +16,7 @@ def is_evidence_relevant_to_context(
     }:
         return False
 
-    if association.evidence.referent != context.environment.identifier:
+    if not _referent_corresponds_to_environment(association, context):
         return False
 
     temporal_context = association.evidence.temporal_context
@@ -30,3 +30,14 @@ def is_evidence_relevant_to_context(
         return True
 
     raise TypeError("unsupported Evidence temporal context")
+
+
+def _referent_corresponds_to_environment(
+    association: EvidencePropositionClassificationAssociation,
+    context: AdmissionEvaluationContext,
+) -> bool:
+    evidence_referent = association.evidence.referent
+    return (
+        evidence_referent == context.environment.identifier
+        or evidence_referent in context.environment.resource_target_arns
+    )
