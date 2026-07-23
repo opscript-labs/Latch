@@ -7,7 +7,9 @@ from botocore.exceptions import ClientError
 from latch.domain.environment import Environment
 from latch.domain.execution import EC2DestructionConfirmation, EC2InstanceLifecycleState
 from latch.infrastructure.dynamodb_active_registration_adapter import (
+    ACTIVE_ENVIRONMENT_REGISTRATION_RECORD_KIND,
     DynamoDBActiveRegistrationAdapter,
+    canonical_registration_timestamp,
     immutable_registration_fingerprint,
 )
 
@@ -61,32 +63,42 @@ def conditional_failure() -> ClientError:
 
 def test_registration_writes_complete_immutable_record_with_fingerprint() -> None:
     client = Mock()
-    environment = make_environment(
-        resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET})
-    )
+    environment = make_environment(resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET}))
 
     DynamoDBActiveRegistrationAdapter(client, "active-environments").register(environment)
 
     item = client.put_item.call_args.kwargs["Item"]
     assert item == {
+        "record_kind": {"S": ACTIVE_ENVIRONMENT_REGISTRATION_RECORD_KIND},
         "identifier": {"S": "env-123"},
         "owner": {"S": "team-platform"},
-        "created_at": {"S": "2026-07-23T08:00:00Z"},
-        "ttl_expires_at": {"S": "2026-07-23T10:00:00Z"},
+        "created_at": {"S": "2026-07-23T08:00:00.000000Z"},
+        "ttl_expires_at": {"S": "2026-07-23T10:00:00.000000Z"},
         "resource_target_arns": {"SS": sorted({FIRST_TARGET, SECOND_TARGET})},
-        "registration_fingerprint": {
-            "S": immutable_registration_fingerprint(environment)
-        },
+        "registration_fingerprint": {"S": immutable_registration_fingerprint(environment)},
     }
+
+
+def test_canonical_index_timestamps_have_fixed_utc_microsecond_precision() -> None:
+    timestamp = datetime(
+        2026,
+        7,
+        23,
+        13,
+        30,
+        1,
+        234,
+        tzinfo=timezone(timedelta(hours=5, minutes=30)),
+    )
+
+    assert canonical_registration_timestamp(timestamp) == "2026-07-23T08:00:01.000234Z"
 
 
 def test_target_input_order_does_not_change_persisted_fingerprint() -> None:
     first = make_environment(resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET}))
     second = make_environment(resource_target_arns=frozenset({SECOND_TARGET, FIRST_TARGET}))
 
-    assert immutable_registration_fingerprint(first) == (
-        immutable_registration_fingerprint(second)
-    )
+    assert immutable_registration_fingerprint(first) == (immutable_registration_fingerprint(second))
 
 
 def test_timestamp_offsets_for_same_instant_produce_same_fingerprint() -> None:
@@ -110,17 +122,13 @@ def test_timestamp_offsets_for_same_instant_produce_same_fingerprint() -> None:
         ),
     )
 
-    assert immutable_registration_fingerprint(first) == (
-        immutable_registration_fingerprint(second)
-    )
+    assert immutable_registration_fingerprint(first) == (immutable_registration_fingerprint(second))
 
 
 def test_creation_uses_conditional_reject_on_existing_semantics() -> None:
     client = Mock()
 
-    DynamoDBActiveRegistrationAdapter(client, "active-environments").register(
-        make_environment()
-    )
+    DynamoDBActiveRegistrationAdapter(client, "active-environments").register(make_environment())
 
     assert (
         client.put_item.call_args.kwargs["ConditionExpression"]
@@ -156,9 +164,7 @@ def test_confirmed_matching_destruction_performs_conditional_delete() -> None:
         Key={"identifier": {"S": "env-123"}},
         ConditionExpression="registration_fingerprint = :registration_fingerprint",
         ExpressionAttributeValues={
-            ":registration_fingerprint": {
-                "S": immutable_registration_fingerprint(environment)
-            }
+            ":registration_fingerprint": {"S": immutable_registration_fingerprint(environment)}
         },
     )
 
@@ -186,9 +192,7 @@ def test_stale_confirmation_cannot_delete_later_registration_with_same_identifie
     delete_kwargs = client.delete_item.call_args.kwargs
     assert delete_kwargs["Key"] == {"identifier": {"S": "env-123"}}
     assert delete_kwargs["ExpressionAttributeValues"] == {
-        ":registration_fingerprint": {
-            "S": immutable_registration_fingerprint(environment)
-        }
+        ":registration_fingerprint": {"S": immutable_registration_fingerprint(environment)}
     }
 
 

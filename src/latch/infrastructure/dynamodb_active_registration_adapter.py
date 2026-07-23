@@ -9,6 +9,8 @@ from latch.domain.execution import (
     EC2DestructionConfirmationOutcome,
 )
 
+ACTIVE_ENVIRONMENT_REGISTRATION_RECORD_KIND = "ACTIVE_ENVIRONMENT_REGISTRATION"
+
 
 class DynamoDBActiveRegistrationAdapter:
     def __init__(self, dynamodb_client: Any, table_name: str) -> None:
@@ -32,10 +34,7 @@ class DynamoDBActiveRegistrationAdapter:
         if not isinstance(confirmation, EC2DestructionConfirmation):
             raise ValueError("confirmation must be an EC2DestructionConfirmation")
 
-        if (
-            confirmation.outcome
-            is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
-        ):
+        if confirmation.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED:
             return
 
         environment = confirmation.environment
@@ -44,20 +43,18 @@ class DynamoDBActiveRegistrationAdapter:
             Key={"identifier": {"S": environment.identifier}},
             ConditionExpression="registration_fingerprint = :registration_fingerprint",
             ExpressionAttributeValues={
-                ":registration_fingerprint": {
-                    "S": immutable_registration_fingerprint(environment)
-                }
+                ":registration_fingerprint": {"S": immutable_registration_fingerprint(environment)}
             },
         )
 
 
 def immutable_registration_fingerprint(environment: Environment) -> str:
     canonical_environment = {
-        "created_at": _canonical_datetime(environment.created_at),
+        "created_at": canonical_registration_timestamp(environment.created_at),
         "identifier": environment.identifier,
         "owner": environment.owner,
         "resource_target_arns": sorted(environment.resource_target_arns),
-        "ttl_expires_at": _canonical_datetime(environment.ttl_expires_at),
+        "ttl_expires_at": canonical_registration_timestamp(environment.ttl_expires_at),
     }
     canonical_json = json.dumps(
         canonical_environment,
@@ -69,10 +66,11 @@ def immutable_registration_fingerprint(environment: Environment) -> str:
 
 def _item_for_environment(environment: Environment) -> dict[str, Any]:
     return {
+        "record_kind": {"S": ACTIVE_ENVIRONMENT_REGISTRATION_RECORD_KIND},
         "identifier": {"S": environment.identifier},
         "owner": {"S": environment.owner},
-        "created_at": {"S": _canonical_datetime(environment.created_at)},
-        "ttl_expires_at": {"S": _canonical_datetime(environment.ttl_expires_at)},
+        "created_at": {"S": canonical_registration_timestamp(environment.created_at)},
+        "ttl_expires_at": {"S": canonical_registration_timestamp(environment.ttl_expires_at)},
         "resource_target_arns": {
             "SS": sorted(environment.resource_target_arns),
         },
@@ -82,5 +80,5 @@ def _item_for_environment(environment: Environment) -> dict[str, Any]:
     }
 
 
-def _canonical_datetime(value: datetime) -> str:
-    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+def canonical_registration_timestamp(value: datetime) -> str:
+    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
