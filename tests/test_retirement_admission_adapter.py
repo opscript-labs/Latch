@@ -131,12 +131,131 @@ def test_payload_supplied_producer_does_not_authorize(valid_payload: dict[str, A
         adapter.handle(valid_payload, producer_authority="UntrustedProducer")
 
 
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "version",
+        "product_event_type",
+        "request",
+        "claim_time",
+    ],
+)
 def test_missing_root_fields_fail_closed_without_calling_evaluator(
-    valid_payload: dict[str, Any]
+    valid_payload: dict[str, Any], missing_field: str
 ) -> None:
     evaluator = MockEvaluator()
     adapter = RetirementAdmissionAdapter(evaluator)
-    del valid_payload["request"]
+    del valid_payload[missing_field]
+
+    with pytest.raises(ValueError):
+        adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
+
+    assert len(evaluator.calls) == 0
+
+
+@pytest.mark.parametrize(
+    "missing_request_field",
+    [
+        "environment_identity",
+        "retirement_claim_identity",
+        "claimant_identity",
+    ],
+)
+def test_missing_request_fields_fail_closed_without_calling_evaluator(
+    valid_payload: dict[str, Any], missing_request_field: str
+) -> None:
+    evaluator = MockEvaluator()
+    adapter = RetirementAdmissionAdapter(evaluator)
+    del valid_payload["request"][missing_request_field]
+
+    with pytest.raises(ValueError):
+        adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
+
+    assert len(evaluator.calls) == 0
+
+
+@pytest.mark.parametrize(
+    "missing_env_field",
+    [
+        "identifier",
+        "created_at",
+        "ttl_expires_at",
+        "owner",
+        "resource_target_arns",
+    ],
+)
+def test_missing_environment_fields_fail_closed_without_calling_evaluator(
+    valid_payload: dict[str, Any], missing_env_field: str
+) -> None:
+    evaluator = MockEvaluator()
+    adapter = RetirementAdmissionAdapter(evaluator)
+    del valid_payload["request"]["environment_identity"][missing_env_field]
+
+    with pytest.raises(ValueError):
+        adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
+
+    assert len(evaluator.calls) == 0
+
+
+@pytest.mark.parametrize(
+    "invalid_key,invalid_value",
+    [
+        ("version", "2"),
+        ("claim_time", "not-a-datetime"),
+        ("claim_time", "2026-07-23T10:00:00"),
+        ("product_event_type", "OTHER_EVENT"),
+    ],
+)
+def test_invalid_root_field_values_fail_closed(
+    valid_payload: dict[str, Any], invalid_key: str, invalid_value: Any
+) -> None:
+    evaluator = MockEvaluator()
+    adapter = RetirementAdmissionAdapter(evaluator)
+    valid_payload[invalid_key] = invalid_value
+
+    with pytest.raises(ValueError):
+        adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
+
+    assert len(evaluator.calls) == 0
+
+
+@pytest.mark.parametrize(
+    "invalid_key,invalid_value",
+    [
+        ("created_at", "not-a-datetime"),
+        ("created_at", "2026-07-23T08:00:00"),
+        ("resource_target_arns", []),
+        ("resource_target_arns", ["not-an-arn"]),
+    ],
+)
+def test_invalid_env_field_values_fail_closed(
+    valid_payload: dict[str, Any], invalid_key: str, invalid_value: Any
+) -> None:
+    evaluator = MockEvaluator()
+    adapter = RetirementAdmissionAdapter(evaluator)
+    valid_payload["request"]["environment_identity"][invalid_key] = invalid_value
+
+    with pytest.raises(ValueError):
+        adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
+
+    assert len(evaluator.calls) == 0
+
+
+def test_extra_root_fields_are_strictly_rejected(valid_payload: dict[str, Any]) -> None:
+    evaluator = MockEvaluator()
+    adapter = RetirementAdmissionAdapter(evaluator)
+    valid_payload["extra_field"] = "value"
+
+    with pytest.raises(ValueError):
+        adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")
+
+    assert len(evaluator.calls) == 0
+
+
+def test_extra_environment_fields_are_strictly_rejected(valid_payload: dict[str, Any]) -> None:
+    evaluator = MockEvaluator()
+    adapter = RetirementAdmissionAdapter(evaluator)
+    valid_payload["request"]["environment_identity"]["extra_field"] = "value"
 
     with pytest.raises(ValueError):
         adapter.handle(valid_payload, producer_authority="RetirementAdmissionRequestProducer")

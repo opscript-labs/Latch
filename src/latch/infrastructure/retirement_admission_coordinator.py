@@ -47,7 +47,7 @@ class RetirementAdmissionCoordinator:
             db_owner = self._active_claim_validator.get_authoritative_owner(
                 claim.environment.identifier
             )
-            if db_owner is not None and claimant_identity != db_owner:
+            if db_owner is None or claimant_identity != db_owner:
                 raise ValueError(
                     "Claimant identity does not match authoritative registered owner"
                 )
