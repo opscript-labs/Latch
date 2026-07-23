@@ -16,11 +16,12 @@ from latch.domain.admission import (
     OperationalRetirementReadiness,
     OwnerApprovalParticipation,
     OwnerRetirementApproval,
+    RegisteredTargetOperationalEvidenceCoverage,
     RetirementAdmissionVerdict,
     RetirementLockParticipation,
     RetirementPrerequisiteStatus,
 )
-from latch.domain.environment import Environment
+from latch.domain.environment import Environment, RetirementEvaluationClaim
 from latch.domain.evidence import (
     Evidence,
     EvidenceInstant,
@@ -67,6 +68,7 @@ def make_association(
     classification: EvidencePropositionClassification,
     proposition: str,
     temporal_context: EvidenceTemporalContext | None = None,
+    referent: str | None = None,
 ) -> OperationalDimensionAssociation:
     if temporal_context is None:
         temporal_context = EvidenceInstant(EVIDENCE_AT)
@@ -78,7 +80,7 @@ def make_association(
     )
     evidence = Evidence(
         proposition=proposition,
-        referent=context.environment.identifier,
+        referent=referent or next(iter(context.environment.resource_target_arns)),
         source_provenance=SourceProvenance(
             source_system=source_system,
             source_occurrence=f"{source_system}:{proposition}",
@@ -101,12 +103,14 @@ def make_inactivity(
     context: AdmissionEvaluationContext,
     dimension: OperationalDimension,
     proposition: str,
+    referent: str | None = None,
 ) -> OperationalDimensionAssociation:
     return make_association(
         context,
         dimension,
         EvidencePropositionClassification.OPERATIONAL_INACTIVITY,
         proposition,
+        referent=referent,
     )
 
 
@@ -118,23 +122,33 @@ def make_authorization(
     if context is None:
         context = make_context()
 
-    readiness = OperationalRetirementReadiness(
-        OperationalDimensionAssociationSet(
-            context,
-            [
-                make_inactivity(context, OperationalDimension.CPU_ACTIVITY, "cpu inactive"),
+    association_set = OperationalDimensionAssociationSet(
+        context,
+        [
+            association
+            for target_arn in context.environment.resource_target_arns
+            for association in (
+                make_inactivity(
+                    context,
+                    OperationalDimension.CPU_ACTIVITY,
+                    f"cpu inactive for {target_arn}",
+                    referent=target_arn,
+                ),
                 make_inactivity(
                     context,
                     OperationalDimension.NETWORK_ACTIVITY,
-                    "network inactive",
+                    f"network inactive for {target_arn}",
+                    referent=target_arn,
                 ),
-            ],
-        )
+            )
+        ],
+    )
+    claim = RetirementEvaluationClaim(context.environment, context.evaluated_at)
+    readiness = OperationalRetirementReadiness(
+        RegisteredTargetOperationalEvidenceCoverage(claim, association_set)
     )
     prerequisite_status = RetirementPrerequisiteStatus(readiness)
-    approval = (
-        OwnerRetirementApproval(context, "team-platform") if with_approval else None
-    )
+    approval = OwnerRetirementApproval(context, "team-platform") if with_approval else None
     owner_participation = OwnerApprovalParticipation(prerequisite_status, approval)
     verdict = RetirementAdmissionVerdict(RetirementLockParticipation(owner_participation))
     return RetirementExecutionAuthorization(verdict)
@@ -157,10 +171,7 @@ def test_all_targets_accepted_returns_request_accepted() -> None:
         results=[result(FIRST_TARGET, True)],
     )
 
-    assert (
-        invocation.outcome
-        is EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_ACCEPTED
-    )
+    assert invocation.outcome is EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_ACCEPTED
 
 
 def test_missing_target_returns_request_not_accepted() -> None:
@@ -173,8 +184,7 @@ def test_missing_target_returns_request_not_accepted() -> None:
     )
 
     assert (
-        invocation.outcome
-        is EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_NOT_ACCEPTED
+        invocation.outcome is EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_NOT_ACCEPTED
     )
 
 
@@ -185,8 +195,7 @@ def test_one_rejected_target_returns_request_not_accepted() -> None:
     )
 
     assert (
-        invocation.outcome
-        is EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_NOT_ACCEPTED
+        invocation.outcome is EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_NOT_ACCEPTED
     )
 
 
@@ -200,8 +209,7 @@ def test_partial_acceptance_returns_request_not_accepted() -> None:
     )
 
     assert (
-        invocation.outcome
-        is EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_NOT_ACCEPTED
+        invocation.outcome is EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_NOT_ACCEPTED
     )
 
 
@@ -283,9 +291,7 @@ def test_invocation_and_result_are_immutable() -> None:
     )
 
     with pytest.raises(FrozenInstanceError):
-        invocation.outcome = (
-            EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_NOT_ACCEPTED
-        )
+        invocation.outcome = EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_NOT_ACCEPTED
 
     with pytest.raises(FrozenInstanceError):
         invocation_result.accepted = False

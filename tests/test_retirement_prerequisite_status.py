@@ -14,10 +14,11 @@ from latch.domain.admission import (
     OperationalDimensionAssociation,
     OperationalDimensionAssociationSet,
     OperationalRetirementReadiness,
+    RegisteredTargetOperationalEvidenceCoverage,
     RetirementPrerequisiteStatus,
     RetirementPrerequisiteStatusOutcome,
 )
-from latch.domain.environment import Environment
+from latch.domain.environment import Environment, RetirementEvaluationClaim
 from latch.domain.evidence import (
     Evidence,
     EvidenceInstant,
@@ -28,6 +29,7 @@ from latch.domain.evidence import (
 CREATED_AT = datetime(2026, 7, 23, 8, 0, tzinfo=UTC)
 TTL_EXPIRES_AT = datetime(2026, 7, 23, 12, 0, tzinfo=UTC)
 EVIDENCE_AT = datetime(2026, 7, 23, 10, 0, tzinfo=UTC)
+TARGET = "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
 
 
 def make_context(
@@ -41,7 +43,7 @@ def make_context(
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={TARGET},
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=evaluated_at,
@@ -65,7 +67,7 @@ def make_association(
     )
     evidence = Evidence(
         proposition=proposition,
-        referent=context.environment.identifier,
+        referent=TARGET,
         source_provenance=SourceProvenance(
             source_system=source_system,
             source_occurrence=f"{source_system}:{proposition}",
@@ -117,8 +119,10 @@ def make_readiness(
     context: AdmissionEvaluationContext,
     associations: list[OperationalDimensionAssociation],
 ) -> OperationalRetirementReadiness:
+    association_set = OperationalDimensionAssociationSet(context, associations)
+    claim = RetirementEvaluationClaim(context.environment, context.evaluated_at)
     return OperationalRetirementReadiness(
-        OperationalDimensionAssociationSet(context, associations)
+        RegisteredTargetOperationalEvidenceCoverage(claim, association_set)
     )
 
 
@@ -150,10 +154,7 @@ def test_retirement_prerequisite_status_has_exact_closed_vocabulary() -> None:
 def test_timing_eligible_and_ready_is_satisfied() -> None:
     status = RetirementPrerequisiteStatus(make_ready_readiness())
 
-    assert (
-        status.outcome
-        is RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_SATISFIED
-    )
+    assert status.outcome is RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_SATISFIED
 
 
 def test_timing_not_eligible_and_ready_is_not_satisfied() -> None:
@@ -162,8 +163,7 @@ def test_timing_not_eligible_and_ready_is_not_satisfied() -> None:
     )
 
     assert (
-        status.outcome
-        is RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_NOT_SATISFIED
+        status.outcome is RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_NOT_SATISFIED
     )
 
 
@@ -184,8 +184,7 @@ def test_timing_eligible_and_not_ready_is_not_satisfied() -> None:
     status = RetirementPrerequisiteStatus(readiness)
 
     assert (
-        status.outcome
-        is RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_NOT_SATISFIED
+        status.outcome is RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_NOT_SATISFIED
     )
 
 
@@ -198,10 +197,7 @@ def test_timing_eligible_and_unresolved_readiness_is_unresolved() -> None:
 
     status = RetirementPrerequisiteStatus(readiness)
 
-    assert (
-        status.outcome
-        is RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_UNRESOLVED
-    )
+    assert status.outcome is RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_UNRESOLVED
 
 
 def test_timing_not_eligible_takes_precedence_over_unresolved_readiness() -> None:
@@ -214,8 +210,7 @@ def test_timing_not_eligible_takes_precedence_over_unresolved_readiness() -> Non
     status = RetirementPrerequisiteStatus(readiness)
 
     assert (
-        status.outcome
-        is RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_NOT_SATISFIED
+        status.outcome is RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_NOT_SATISFIED
     )
 
 
@@ -230,9 +225,9 @@ def test_identity_and_hashing_depend_only_on_readiness() -> None:
 
 
 def test_equivalent_readiness_artifacts_produce_equal_status() -> None:
-    assert RetirementPrerequisiteStatus(make_ready_readiness()) == (
-        RetirementPrerequisiteStatus(make_ready_readiness())
-    )
+    readiness = make_ready_readiness()
+
+    assert RetirementPrerequisiteStatus(readiness) == RetirementPrerequisiteStatus(readiness)
 
 
 def test_changed_readiness_artifact_produces_distinct_status() -> None:
@@ -243,9 +238,7 @@ def test_changed_readiness_artifact_produces_distinct_status() -> None:
         [make_inactivity(context, OperationalDimension.CPU_ACTIVITY, "cpu inactive")],
     )
 
-    assert RetirementPrerequisiteStatus(ready) != RetirementPrerequisiteStatus(
-        unresolved
-    )
+    assert RetirementPrerequisiteStatus(ready) != RetirementPrerequisiteStatus(unresolved)
 
 
 def test_timing_eligibility_and_outcome_cannot_be_caller_supplied() -> None:
@@ -260,9 +253,7 @@ def test_timing_eligibility_and_outcome_cannot_be_caller_supplied() -> None:
     with pytest.raises(TypeError):
         RetirementPrerequisiteStatus(
             readiness=readiness,
-            outcome=(
-                RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_SATISFIED
-            ),
+            outcome=(RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_SATISFIED),
         )
 
 
@@ -270,9 +261,7 @@ def test_retirement_prerequisite_status_is_immutable() -> None:
     status = RetirementPrerequisiteStatus(make_ready_readiness())
 
     with pytest.raises(FrozenInstanceError):
-        status.outcome = (
-            RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_UNRESOLVED
-        )
+        status.outcome = RetirementPrerequisiteStatusOutcome.RETIREMENT_PREREQUISITES_UNRESOLVED
 
 
 def test_retirement_prerequisite_status_does_not_mutate_upstream_artifacts() -> None:
@@ -280,14 +269,14 @@ def test_retirement_prerequisite_status_does_not_mutate_upstream_artifacts() -> 
     association_set = readiness.association_set
     context = association_set.context
     environment = context.environment
-    readiness_coverage = readiness.coverage
+    readiness_coverage = readiness.conflict_coverage
     readiness_conflict_status = readiness.conflict_status
 
     status = RetirementPrerequisiteStatus(readiness)
 
     assert status.readiness == readiness
     assert readiness.association_set == association_set
-    assert readiness.coverage == readiness_coverage
+    assert readiness.conflict_coverage == readiness_coverage
     assert readiness.conflict_status == readiness_conflict_status
     assert association_set.context == context
     assert context.environment == environment

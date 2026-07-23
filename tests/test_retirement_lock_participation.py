@@ -17,11 +17,12 @@ from latch.domain.admission import (
     OwnerApprovalParticipation,
     OwnerApprovalParticipationOutcome,
     OwnerRetirementApproval,
+    RegisteredTargetOperationalEvidenceCoverage,
     RetirementLock,
     RetirementLockParticipation,
     RetirementPrerequisiteStatus,
 )
-from latch.domain.environment import Environment
+from latch.domain.environment import Environment, RetirementEvaluationClaim
 from latch.domain.evidence import (
     Evidence,
     EvidenceInstant,
@@ -32,6 +33,7 @@ from latch.domain.evidence import (
 CREATED_AT = datetime(2026, 7, 23, 8, 0, tzinfo=UTC)
 TTL_EXPIRES_AT = datetime(2026, 7, 23, 12, 0, tzinfo=UTC)
 EVIDENCE_AT = datetime(2026, 7, 23, 10, 0, tzinfo=UTC)
+TARGET = "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
 
 
 def make_context(
@@ -45,7 +47,7 @@ def make_context(
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={TARGET},
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=evaluated_at,
@@ -69,7 +71,7 @@ def make_association(
     )
     evidence = Evidence(
         proposition=proposition,
-        referent=context.environment.identifier,
+        referent=TARGET,
         source_provenance=SourceProvenance(
             source_system=source_system,
             source_occurrence=f"{source_system}:{proposition}",
@@ -118,8 +120,10 @@ def make_prerequisite_status(
     context: AdmissionEvaluationContext,
     associations: list[OperationalDimensionAssociation],
 ) -> RetirementPrerequisiteStatus:
+    association_set = OperationalDimensionAssociationSet(context, associations)
+    claim = RetirementEvaluationClaim(context.environment, context.evaluated_at)
     readiness = OperationalRetirementReadiness(
-        OperationalDimensionAssociationSet(context, associations)
+        RegisteredTargetOperationalEvidenceCoverage(claim, association_set)
     )
     return RetirementPrerequisiteStatus(readiness)
 
@@ -144,9 +148,7 @@ def make_owner_participation(
         ]
 
     status = make_prerequisite_status(context, associations)
-    approval = (
-        OwnerRetirementApproval(context, "team-platform") if with_approval else None
-    )
+    approval = OwnerRetirementApproval(context, "team-platform") if with_approval else None
     return OwnerApprovalParticipation(status, approval)
 
 
@@ -170,7 +172,9 @@ def test_mismatched_lock_environment_is_rejected() -> None:
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={
+                "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
+            },
         )
     )
 
@@ -205,9 +209,7 @@ def test_lock_present_blocks_unresolved_owner_participation() -> None:
     owner_participation = make_owner_participation(
         with_approval=True,
         context=context,
-        associations=[
-            make_inactivity(context, OperationalDimension.CPU_ACTIVITY, "cpu inactive")
-        ],
+        associations=[make_inactivity(context, OperationalDimension.CPU_ACTIVITY, "cpu inactive")],
     )
     lock = RetirementLock(context.environment)
 
@@ -217,9 +219,7 @@ def test_lock_present_blocks_unresolved_owner_participation() -> None:
 
 
 def test_lock_absent_preserves_permit_outcome() -> None:
-    participation = RetirementLockParticipation(
-        make_owner_participation(with_approval=True)
-    )
+    participation = RetirementLockParticipation(make_owner_participation(with_approval=True))
 
     assert participation.outcome is OwnerApprovalParticipationOutcome.PERMIT_FURTHER_ADMISSION
 
@@ -229,23 +229,16 @@ def test_lock_absent_preserves_unresolved_outcome() -> None:
     owner_participation = make_owner_participation(
         with_approval=True,
         context=context,
-        associations=[
-            make_inactivity(context, OperationalDimension.CPU_ACTIVITY, "cpu inactive")
-        ],
+        associations=[make_inactivity(context, OperationalDimension.CPU_ACTIVITY, "cpu inactive")],
     )
 
     participation = RetirementLockParticipation(owner_participation)
 
-    assert (
-        participation.outcome
-        is OwnerApprovalParticipationOutcome.FURTHER_ADMISSION_UNRESOLVED
-    )
+    assert participation.outcome is OwnerApprovalParticipationOutcome.FURTHER_ADMISSION_UNRESOLVED
 
 
 def test_lock_absent_preserves_block_outcome() -> None:
-    participation = RetirementLockParticipation(
-        make_owner_participation(with_approval=False)
-    )
+    participation = RetirementLockParticipation(make_owner_participation(with_approval=False))
 
     assert participation.outcome is OwnerApprovalParticipationOutcome.BLOCK_FURTHER_ADMISSION
 
@@ -264,16 +257,17 @@ def test_identity_and_hashing_use_owner_participation_and_optional_lock() -> Non
 
 
 def test_equivalent_inputs_produce_equal_participation() -> None:
-    first = make_owner_participation(with_approval=True)
-    second = make_owner_participation(with_approval=True)
+    owner_participation = make_owner_participation(with_approval=True)
 
     assert RetirementLockParticipation(
-        first,
-        RetirementLock(first.prerequisite_status.readiness.association_set.context.environment),
-    ) == RetirementLockParticipation(
-        second,
+        owner_participation,
         RetirementLock(
-            second.prerequisite_status.readiness.association_set.context.environment
+            owner_participation.prerequisite_status.readiness.association_set.context.environment
+        ),
+    ) == RetirementLockParticipation(
+        owner_participation,
+        RetirementLock(
+            owner_participation.prerequisite_status.readiness.association_set.context.environment
         ),
     )
 
@@ -306,14 +300,10 @@ def test_outcome_cannot_be_caller_supplied() -> None:
 
 
 def test_retirement_lock_participation_is_immutable() -> None:
-    participation = RetirementLockParticipation(
-        make_owner_participation(with_approval=True)
-    )
+    participation = RetirementLockParticipation(make_owner_participation(with_approval=True))
 
     with pytest.raises(FrozenInstanceError):
-        participation.outcome = (
-            OwnerApprovalParticipationOutcome.BLOCK_FURTHER_ADMISSION
-        )
+        participation.outcome = OwnerApprovalParticipationOutcome.BLOCK_FURTHER_ADMISSION
 
 
 def test_retirement_lock_participation_does_not_mutate_upstream_artifacts() -> None:

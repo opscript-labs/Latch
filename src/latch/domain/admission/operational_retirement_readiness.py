@@ -15,6 +15,10 @@ from latch.domain.admission.operational_dimension import (
 from latch.domain.admission.operational_dimension_association_set import (
     OperationalDimensionAssociationSet,
 )
+from latch.domain.admission.registered_target_operational_evidence_coverage import (
+    RegisteredTargetOperationalEvidenceCoverage,
+    RegisteredTargetOperationalEvidenceCoverageOutcome,
+)
 from latch.domain.admission.source_standing import OperationalEstablishmentOutcome
 
 
@@ -26,19 +30,30 @@ class OperationalRetirementReadinessOutcome(Enum):
 
 @dataclass(frozen=True, slots=True)
 class OperationalRetirementReadiness:
-    association_set: OperationalDimensionAssociationSet
-    coverage: OperationalConflictRecognitionCoverage = field(init=False, compare=False)
+    target_coverage: RegisteredTargetOperationalEvidenceCoverage
+    association_set: OperationalDimensionAssociationSet = field(init=False, compare=False)
+    conflict_coverage: OperationalConflictRecognitionCoverage = field(
+        init=False,
+        compare=False,
+    )
     conflict_status: OperationalConflictStatus = field(init=False, compare=False)
     outcome: OperationalRetirementReadinessOutcome = field(init=False, compare=False)
 
     def __post_init__(self) -> None:
-        if not isinstance(self.association_set, OperationalDimensionAssociationSet):
-            raise ValueError("association_set must be an OperationalDimensionAssociationSet")
+        if not isinstance(
+            self.target_coverage,
+            RegisteredTargetOperationalEvidenceCoverage,
+        ):
+            raise ValueError(
+                "target_coverage must be a RegisteredTargetOperationalEvidenceCoverage"
+            )
 
-        coverage = OperationalConflictRecognitionCoverage(self.association_set)
-        conflict_status = OperationalConflictStatus(coverage)
+        association_set = self.target_coverage.association_set
+        conflict_coverage = OperationalConflictRecognitionCoverage(association_set)
+        conflict_status = OperationalConflictStatus(conflict_coverage)
 
-        object.__setattr__(self, "coverage", coverage)
+        object.__setattr__(self, "association_set", association_set)
+        object.__setattr__(self, "conflict_coverage", conflict_coverage)
         object.__setattr__(self, "conflict_status", conflict_status)
         object.__setattr__(self, "outcome", self._derive_outcome(conflict_status))
 
@@ -56,6 +71,12 @@ class OperationalRetirementReadiness:
             return OperationalRetirementReadinessOutcome.NOT_READY
 
         if (
+            self.target_coverage.outcome
+            is RegisteredTargetOperationalEvidenceCoverageOutcome.INCOMPLETE
+        ):
+            return OperationalRetirementReadinessOutcome.UNRESOLVED
+
+        if (
             not self._has_dimension(OperationalDimension.CPU_ACTIVITY)
             or not self._has_dimension(OperationalDimension.NETWORK_ACTIVITY)
             or conflict_status.outcome
@@ -67,8 +88,7 @@ class OperationalRetirementReadiness:
 
     def _has_dimension(self, dimension: OperationalDimension) -> bool:
         return any(
-            association.dimension is dimension
-            for association in self.association_set.associations
+            association.dimension is dimension for association in self.association_set.associations
         )
 
     def _dimension_establishes_activity(self, dimension: OperationalDimension) -> bool:

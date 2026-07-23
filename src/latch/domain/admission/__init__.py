@@ -50,6 +50,10 @@ from latch.domain.admission.owner_approval_participation import (
     OwnerApprovalParticipationOutcome,
 )
 from latch.domain.admission.owner_retirement_approval import OwnerRetirementApproval
+from latch.domain.admission.registered_target_operational_evidence_coverage import (
+    RegisteredTargetOperationalEvidenceCoverage,
+    RegisteredTargetOperationalEvidenceCoverageOutcome,
+)
 from latch.domain.admission.relevance import is_evidence_relevant_to_context
 from latch.domain.admission.retirement_admission_verdict import (
     RetirementAdmissionVerdict,
@@ -103,6 +107,8 @@ __all__ = [
     "OwnerApprovalParticipation",
     "OwnerApprovalParticipationOutcome",
     "OwnerRetirementApproval",
+    "RegisteredTargetOperationalEvidenceCoverage",
+    "RegisteredTargetOperationalEvidenceCoverageOutcome",
     "RetirementAdmissionVerdict",
     "RetirementPrerequisiteStatus",
     "RetirementPrerequisiteStatusOutcome",

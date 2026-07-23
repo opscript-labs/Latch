@@ -17,9 +17,10 @@ from latch.domain.admission import (
     OwnerApprovalParticipation,
     OwnerApprovalParticipationOutcome,
     OwnerRetirementApproval,
+    RegisteredTargetOperationalEvidenceCoverage,
     RetirementPrerequisiteStatus,
 )
-from latch.domain.environment import Environment
+from latch.domain.environment import Environment, RetirementEvaluationClaim
 from latch.domain.evidence import (
     Evidence,
     EvidenceInstant,
@@ -30,6 +31,7 @@ from latch.domain.evidence import (
 CREATED_AT = datetime(2026, 7, 23, 8, 0, tzinfo=UTC)
 TTL_EXPIRES_AT = datetime(2026, 7, 23, 12, 0, tzinfo=UTC)
 EVIDENCE_AT = datetime(2026, 7, 23, 10, 0, tzinfo=UTC)
+TARGET = "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
 
 
 def make_context(
@@ -43,7 +45,7 @@ def make_context(
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={TARGET},
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=evaluated_at,
@@ -67,7 +69,7 @@ def make_association(
     )
     evidence = Evidence(
         proposition=proposition,
-        referent=context.environment.identifier,
+        referent=TARGET,
         source_provenance=SourceProvenance(
             source_system=source_system,
             source_occurrence=f"{source_system}:{proposition}",
@@ -119,8 +121,10 @@ def make_prerequisite_status(
     context: AdmissionEvaluationContext,
     associations: list[OperationalDimensionAssociation],
 ) -> RetirementPrerequisiteStatus:
+    association_set = OperationalDimensionAssociationSet(context, associations)
+    claim = RetirementEvaluationClaim(context.environment, context.evaluated_at)
     readiness = OperationalRetirementReadiness(
-        OperationalDimensionAssociationSet(context, associations)
+        RegisteredTargetOperationalEvidenceCoverage(claim, association_set)
     )
     return RetirementPrerequisiteStatus(readiness)
 
@@ -187,21 +191,13 @@ def test_satisfied_prerequisites_with_approval_permit_further_admission() -> Non
         approval=make_approval(status),
     )
 
-    assert (
-        participation.outcome
-        is OwnerApprovalParticipationOutcome.PERMIT_FURTHER_ADMISSION
-    )
+    assert participation.outcome is OwnerApprovalParticipationOutcome.PERMIT_FURTHER_ADMISSION
 
 
 def test_satisfied_prerequisites_without_approval_block_further_admission() -> None:
-    participation = OwnerApprovalParticipation(
-        prerequisite_status=make_satisfied_status()
-    )
+    participation = OwnerApprovalParticipation(prerequisite_status=make_satisfied_status())
 
-    assert (
-        participation.outcome
-        is OwnerApprovalParticipationOutcome.BLOCK_FURTHER_ADMISSION
-    )
+    assert participation.outcome is OwnerApprovalParticipationOutcome.BLOCK_FURTHER_ADMISSION
 
 
 def test_not_satisfied_prerequisites_block_with_approval() -> None:
@@ -211,21 +207,13 @@ def test_not_satisfied_prerequisites_block_with_approval() -> None:
         approval=make_approval(status),
     )
 
-    assert (
-        participation.outcome
-        is OwnerApprovalParticipationOutcome.BLOCK_FURTHER_ADMISSION
-    )
+    assert participation.outcome is OwnerApprovalParticipationOutcome.BLOCK_FURTHER_ADMISSION
 
 
 def test_not_satisfied_prerequisites_block_without_approval() -> None:
-    participation = OwnerApprovalParticipation(
-        prerequisite_status=make_not_satisfied_status()
-    )
+    participation = OwnerApprovalParticipation(prerequisite_status=make_not_satisfied_status())
 
-    assert (
-        participation.outcome
-        is OwnerApprovalParticipationOutcome.BLOCK_FURTHER_ADMISSION
-    )
+    assert participation.outcome is OwnerApprovalParticipationOutcome.BLOCK_FURTHER_ADMISSION
 
 
 def test_unresolved_prerequisites_remain_unresolved_with_approval() -> None:
@@ -235,21 +223,13 @@ def test_unresolved_prerequisites_remain_unresolved_with_approval() -> None:
         approval=make_approval(status),
     )
 
-    assert (
-        participation.outcome
-        is OwnerApprovalParticipationOutcome.FURTHER_ADMISSION_UNRESOLVED
-    )
+    assert participation.outcome is OwnerApprovalParticipationOutcome.FURTHER_ADMISSION_UNRESOLVED
 
 
 def test_unresolved_prerequisites_remain_unresolved_without_approval() -> None:
-    participation = OwnerApprovalParticipation(
-        prerequisite_status=make_unresolved_status()
-    )
+    participation = OwnerApprovalParticipation(prerequisite_status=make_unresolved_status())
 
-    assert (
-        participation.outcome
-        is OwnerApprovalParticipationOutcome.FURTHER_ADMISSION_UNRESOLVED
-    )
+    assert participation.outcome is OwnerApprovalParticipationOutcome.FURTHER_ADMISSION_UNRESOLVED
 
 
 def test_present_approval_for_different_context_is_rejected() -> None:
@@ -279,23 +259,20 @@ def test_identity_and_hashing_depend_only_on_status_and_optional_approval() -> N
 
 
 def test_equivalent_inputs_produce_equal_results() -> None:
-    first_status = make_satisfied_status()
-    second_status = make_satisfied_status()
+    status = make_satisfied_status()
 
     assert OwnerApprovalParticipation(
-        first_status,
-        make_approval(first_status),
+        status,
+        make_approval(status),
     ) == OwnerApprovalParticipation(
-        second_status,
-        make_approval(second_status),
+        status,
+        make_approval(status),
     )
 
 
 def test_changed_prerequisite_status_produces_distinct_identity() -> None:
     assert OwnerApprovalParticipation(make_satisfied_status()) != (
-        OwnerApprovalParticipation(
-            make_satisfied_status(TTL_EXPIRES_AT + timedelta(seconds=1))
-        )
+        OwnerApprovalParticipation(make_satisfied_status(TTL_EXPIRES_AT + timedelta(seconds=1)))
     )
 
 
@@ -320,9 +297,7 @@ def test_owner_approval_participation_is_immutable() -> None:
     participation = OwnerApprovalParticipation(make_satisfied_status())
 
     with pytest.raises(FrozenInstanceError):
-        participation.outcome = (
-            OwnerApprovalParticipationOutcome.PERMIT_FURTHER_ADMISSION
-        )
+        participation.outcome = OwnerApprovalParticipationOutcome.PERMIT_FURTHER_ADMISSION
 
 
 def test_owner_approval_participation_does_not_mutate_inputs() -> None:

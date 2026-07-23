@@ -17,12 +17,13 @@ from latch.domain.admission import (
     OperationalRetirementReadiness,
     OwnerApprovalParticipation,
     OwnerRetirementApproval,
+    RegisteredTargetOperationalEvidenceCoverage,
     RetirementAdmissionVerdict,
     RetirementLock,
     RetirementLockParticipation,
     RetirementPrerequisiteStatus,
 )
-from latch.domain.environment import Environment
+from latch.domain.environment import Environment, RetirementEvaluationClaim
 from latch.domain.evidence import (
     Evidence,
     EvidenceInstant,
@@ -33,6 +34,7 @@ from latch.domain.evidence import (
 CREATED_AT = datetime(2026, 7, 23, 8, 0, tzinfo=UTC)
 TTL_EXPIRES_AT = datetime(2026, 7, 23, 12, 0, tzinfo=UTC)
 EVIDENCE_AT = datetime(2026, 7, 23, 10, 0, tzinfo=UTC)
+TARGET = "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
 
 
 def make_context(
@@ -46,7 +48,7 @@ def make_context(
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={TARGET},
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=evaluated_at,
@@ -70,7 +72,7 @@ def make_association(
     )
     evidence = Evidence(
         proposition=proposition,
-        referent=context.environment.identifier,
+        referent=TARGET,
         source_provenance=SourceProvenance(
             source_system=source_system,
             source_occurrence=f"{source_system}:{proposition}",
@@ -119,8 +121,10 @@ def make_prerequisite_status(
     context: AdmissionEvaluationContext,
     associations: list[OperationalDimensionAssociation],
 ) -> RetirementPrerequisiteStatus:
+    association_set = OperationalDimensionAssociationSet(context, associations)
+    claim = RetirementEvaluationClaim(context.environment, context.evaluated_at)
     readiness = OperationalRetirementReadiness(
-        OperationalDimensionAssociationSet(context, associations)
+        RegisteredTargetOperationalEvidenceCoverage(claim, association_set)
     )
     return RetirementPrerequisiteStatus(readiness)
 
@@ -145,9 +149,7 @@ def make_owner_participation(
         ]
 
     status = make_prerequisite_status(context, associations)
-    approval = (
-        OwnerRetirementApproval(context, "team-platform") if with_approval else None
-    )
+    approval = OwnerRetirementApproval(context, "team-platform") if with_approval else None
     return OwnerApprovalParticipation(status, approval)
 
 
@@ -165,8 +167,7 @@ def make_lock_participation(
     )
     lock = (
         RetirementLock(
-            owner_participation.prerequisite_status.readiness
-            .association_set.context.environment
+            owner_participation.prerequisite_status.readiness.association_set.context.environment
         )
         if with_lock
         else None
@@ -175,17 +176,13 @@ def make_lock_participation(
 
 
 def test_permit_further_admission_maps_to_safe() -> None:
-    verdict = RetirementAdmissionVerdict(
-        make_lock_participation(with_approval=True)
-    )
+    verdict = RetirementAdmissionVerdict(make_lock_participation(with_approval=True))
 
     assert verdict.verdict is AdmissionVerdict.SAFE
 
 
 def test_block_further_admission_maps_to_unsafe() -> None:
-    verdict = RetirementAdmissionVerdict(
-        make_lock_participation(with_approval=False)
-    )
+    verdict = RetirementAdmissionVerdict(make_lock_participation(with_approval=False))
 
     assert verdict.verdict is AdmissionVerdict.UNSAFE
 
@@ -232,8 +229,10 @@ def test_identity_and_hashing_depend_only_on_lock_participation() -> None:
 
 
 def test_equivalent_participation_artifacts_produce_equal_verdict_artifacts() -> None:
-    assert RetirementAdmissionVerdict(make_lock_participation(with_approval=True)) == (
-        RetirementAdmissionVerdict(make_lock_participation(with_approval=True))
+    lock_participation = make_lock_participation(with_approval=True)
+
+    assert RetirementAdmissionVerdict(lock_participation) == (
+        RetirementAdmissionVerdict(lock_participation)
     )
 
 
@@ -256,9 +255,7 @@ def test_verdict_cannot_be_caller_supplied() -> None:
 
 
 def test_retirement_admission_verdict_is_immutable() -> None:
-    verdict = RetirementAdmissionVerdict(
-        make_lock_participation(with_approval=True)
-    )
+    verdict = RetirementAdmissionVerdict(make_lock_participation(with_approval=True))
 
     with pytest.raises(FrozenInstanceError):
         verdict.verdict = AdmissionVerdict.UNSAFE

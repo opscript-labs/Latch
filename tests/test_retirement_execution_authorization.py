@@ -16,11 +16,12 @@ from latch.domain.admission import (
     OperationalRetirementReadiness,
     OwnerApprovalParticipation,
     OwnerRetirementApproval,
+    RegisteredTargetOperationalEvidenceCoverage,
     RetirementAdmissionVerdict,
     RetirementLockParticipation,
     RetirementPrerequisiteStatus,
 )
-from latch.domain.environment import Environment
+from latch.domain.environment import Environment, RetirementEvaluationClaim
 from latch.domain.evidence import (
     Evidence,
     EvidenceInstant,
@@ -35,6 +36,7 @@ from latch.domain.execution import (
 CREATED_AT = datetime(2026, 7, 23, 8, 0, tzinfo=UTC)
 TTL_EXPIRES_AT = datetime(2026, 7, 23, 12, 0, tzinfo=UTC)
 EVIDENCE_AT = datetime(2026, 7, 23, 10, 0, tzinfo=UTC)
+TARGET = "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
 
 
 def make_context(
@@ -48,7 +50,7 @@ def make_context(
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={TARGET},
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=evaluated_at,
@@ -72,7 +74,7 @@ def make_association(
     )
     evidence = Evidence(
         proposition=proposition,
-        referent=context.environment.identifier,
+        referent=TARGET,
         source_provenance=SourceProvenance(
             source_system=source_system,
             source_occurrence=f"{source_system}:{proposition}",
@@ -108,8 +110,10 @@ def make_prerequisite_status(
     context: AdmissionEvaluationContext,
     associations: list[OperationalDimensionAssociation],
 ) -> RetirementPrerequisiteStatus:
+    association_set = OperationalDimensionAssociationSet(context, associations)
+    claim = RetirementEvaluationClaim(context.environment, context.evaluated_at)
     readiness = OperationalRetirementReadiness(
-        OperationalDimensionAssociationSet(context, associations)
+        RegisteredTargetOperationalEvidenceCoverage(claim, association_set)
     )
     return RetirementPrerequisiteStatus(readiness)
 
@@ -134,9 +138,7 @@ def make_verdict(
         ]
 
     prerequisite_status = make_prerequisite_status(context, associations)
-    approval = (
-        OwnerRetirementApproval(context, "team-platform") if with_approval else None
-    )
+    approval = OwnerRetirementApproval(context, "team-platform") if with_approval else None
     owner_participation = OwnerApprovalParticipation(prerequisite_status, approval)
     return RetirementAdmissionVerdict(RetirementLockParticipation(owner_participation))
 
@@ -145,10 +147,7 @@ def test_retirement_execution_authorization_has_exact_closed_vocabulary() -> Non
     assert list(RetirementExecutionAuthorizationOutcome) == [
         RetirementExecutionAuthorizationOutcome.RETIREMENT_EXECUTION_AUTHORIZED,
         RetirementExecutionAuthorizationOutcome.RETIREMENT_EXECUTION_REFUSED_UNSAFE,
-        (
-            RetirementExecutionAuthorizationOutcome
-            .RETIREMENT_EXECUTION_REFUSED_INSUFFICIENT
-        ),
+        (RetirementExecutionAuthorizationOutcome.RETIREMENT_EXECUTION_REFUSED_INSUFFICIENT),
     ]
 
 
@@ -182,12 +181,8 @@ def test_insufficient_verdict_refuses_retirement_execution_as_insufficient() -> 
         )
     )
 
-    assert (
-        authorization.outcome
-        is (
-            RetirementExecutionAuthorizationOutcome
-            .RETIREMENT_EXECUTION_REFUSED_INSUFFICIENT
-        )
+    assert authorization.outcome is (
+        RetirementExecutionAuthorizationOutcome.RETIREMENT_EXECUTION_REFUSED_INSUFFICIENT
     )
 
 
@@ -202,9 +197,9 @@ def test_identity_and_hashing_depend_only_on_retirement_admission_verdict() -> N
 
 
 def test_equivalent_verdict_artifacts_produce_equal_authorizations() -> None:
-    assert RetirementExecutionAuthorization(make_verdict(with_approval=True)) == (
-        RetirementExecutionAuthorization(make_verdict(with_approval=True))
-    )
+    verdict = make_verdict(with_approval=True)
+
+    assert RetirementExecutionAuthorization(verdict) == (RetirementExecutionAuthorization(verdict))
 
 
 def test_changed_verdict_artifact_produces_distinct_identity() -> None:
@@ -214,18 +209,14 @@ def test_changed_verdict_artifact_produces_distinct_identity() -> None:
         context=make_context(evaluated_at=TTL_EXPIRES_AT + timedelta(seconds=1)),
     )
 
-    assert RetirementExecutionAuthorization(first) != (
-        RetirementExecutionAuthorization(second)
-    )
+    assert RetirementExecutionAuthorization(first) != (RetirementExecutionAuthorization(second))
 
 
 def test_outcome_cannot_be_caller_supplied() -> None:
     with pytest.raises(TypeError):
         RetirementExecutionAuthorization(
             verdict=make_verdict(with_approval=True),
-            outcome=(
-                RetirementExecutionAuthorizationOutcome.RETIREMENT_EXECUTION_AUTHORIZED
-            ),
+            outcome=(RetirementExecutionAuthorizationOutcome.RETIREMENT_EXECUTION_AUTHORIZED),
         )
 
 
