@@ -14,8 +14,8 @@ from latch.infrastructure.cloudwatch_cpu_inactivity_collector import (
 
 
 class CloudWatchCpuInactivityProgression:
-    def __init__(self, collector: CloudWatchCpuInactivityCollector | None = None) -> None:
-        self._collector = collector or CloudWatchCpuInactivityCollector()
+    def __init__(self, collector: CloudWatchCpuInactivityCollector) -> None:
+        self._collector = collector
 
     def progress(
         self,

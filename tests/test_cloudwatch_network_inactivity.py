@@ -1,6 +1,6 @@
 import math
 from datetime import UTC, datetime, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 from botocore.exceptions import EndpointConnectionError
@@ -90,16 +90,8 @@ def collect_with_response(
 ]:
     cloudwatch_client = Mock()
     cloudwatch_client.get_metric_data.return_value = response
-    session = Mock()
-    session.client.return_value = cloudwatch_client
-
-    with patch(
-        "latch.infrastructure.cloudwatch_network_inactivity_collector.create_ecs_task_role_session",
-        return_value=session,
-    ):
-        result = CloudWatchNetworkInactivityCollector().collect(make_claim(), TARGET)
-
-    return result, session, cloudwatch_client
+    result = CloudWatchNetworkInactivityCollector(cloudwatch_client).collect(make_claim(), TARGET)
+    return result, Mock(), cloudwatch_client
 
 
 def make_collected_association(
@@ -136,10 +128,10 @@ def test_non_aligned_claim_time_queries_latest_complete_six_period_window() -> N
     assert request["EndTime"] == OBSERVATION_END
 
 
-def test_cloudwatch_request_scope_and_regional_client_selection() -> None:
-    _, session, cloudwatch_client = collect_with_response(metric_response())
+def test_cloudwatch_request_scope() -> None:
+    _, _, cloudwatch_client = collect_with_response(metric_response())
 
-    session.client.assert_called_once_with("cloudwatch", region_name="us-east-1")
+    cloudwatch_client.get_metric_data.assert_called_once()
     request = cloudwatch_client.get_metric_data.call_args.kwargs
     assert request["MetricDataQueries"] == [
         {
@@ -346,16 +338,9 @@ def test_non_affirmative_progression_returns_no_dimension_association() -> None:
 
 
 def test_non_member_target_is_rejected_before_client_or_collection() -> None:
-    with (
-        patch(
-            "latch.infrastructure.cloudwatch_network_inactivity_collector."
-            "create_ecs_task_role_session"
-        ) as factory,
-        pytest.raises(ValueError, match="registered"),
-    ):
-        CloudWatchNetworkInactivityCollector().collect(make_claim(), OTHER_TARGET)
-
-    factory.assert_not_called()
+    cloudwatch_client = Mock()
+    with pytest.raises(ValueError, match="registered"):
+        CloudWatchNetworkInactivityCollector(cloudwatch_client).collect(make_claim(), OTHER_TARGET)
 
     collector = Mock()
     with pytest.raises(ValueError, match="registered"):
@@ -367,18 +352,9 @@ def test_request_level_sdk_failure_propagates() -> None:
     cloudwatch_client = Mock()
     error = EndpointConnectionError(endpoint_url="https://cloudwatch.us-east-1.amazonaws.com")
     cloudwatch_client.get_metric_data.side_effect = error
-    session = Mock()
-    session.client.return_value = cloudwatch_client
 
-    with (
-        patch(
-            "latch.infrastructure.cloudwatch_network_inactivity_collector."
-            "create_ecs_task_role_session",
-            return_value=session,
-        ),
-        pytest.raises(EndpointConnectionError) as raised,
-    ):
-        CloudWatchNetworkInactivityCollector().collect(make_claim(), TARGET)
+    with pytest.raises(EndpointConnectionError) as raised:
+        CloudWatchNetworkInactivityCollector(cloudwatch_client).collect(make_claim(), TARGET)
 
     assert raised.value is error
 

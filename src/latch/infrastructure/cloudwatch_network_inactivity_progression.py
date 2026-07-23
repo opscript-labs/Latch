@@ -16,9 +16,9 @@ from latch.infrastructure.cloudwatch_network_inactivity_collector import (
 class CloudWatchNetworkInactivityProgression:
     def __init__(
         self,
-        collector: CloudWatchNetworkInactivityCollector | None = None,
+        collector: CloudWatchNetworkInactivityCollector,
     ) -> None:
-        self._collector = collector or CloudWatchNetworkInactivityCollector()
+        self._collector = collector
 
     def progress(
         self,

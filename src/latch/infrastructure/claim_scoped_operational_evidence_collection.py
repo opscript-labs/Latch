@@ -18,13 +18,11 @@ from latch.infrastructure.cloudwatch_network_inactivity_progression import (
 class ClaimScopedOperationalEvidenceCollection:
     def __init__(
         self,
-        cpu_progression: CloudWatchCpuInactivityProgression | None = None,
-        network_progression: CloudWatchNetworkInactivityProgression | None = None,
+        cpu_progression: CloudWatchCpuInactivityProgression,
+        network_progression: CloudWatchNetworkInactivityProgression,
     ) -> None:
-        self._cpu_progression = cpu_progression or CloudWatchCpuInactivityProgression()
-        self._network_progression = (
-            network_progression or CloudWatchNetworkInactivityProgression()
-        )
+        self._cpu_progression = cpu_progression
+        self._network_progression = network_progression
 
     def collect(
         self,

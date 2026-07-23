@@ -1,6 +1,6 @@
 import math
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Protocol
 
 from latch.domain.admission import (
     EvidencePropositionClassification,
@@ -12,7 +12,12 @@ from latch.domain.evidence import Evidence, EvidenceInterval, SourceProvenance
 from latch.infrastructure.dynamodb_active_registration_adapter import (
     canonical_registration_timestamp,
 )
-from latch.infrastructure.ecs_task_role_credentials import create_ecs_task_role_session
+
+
+class CloudWatchClient(Protocol):
+    def get_metric_data(self, **kwargs: Any) -> Any:
+        ...
+
 
 CPU_INACTIVITY_THRESHOLD_PERCENT = 1.0
 OBSERVATION_PERIOD_SECONDS = 300
@@ -20,6 +25,9 @@ OBSERVATION_PERIOD_COUNT = 6
 
 
 class CloudWatchCpuInactivityCollector:
+    def __init__(self, cloudwatch_client: CloudWatchClient) -> None:
+        self._cloudwatch_client = cloudwatch_client
+
     def collect(
         self,
         claim: RetirementEvaluationClaim,
@@ -36,15 +44,12 @@ class CloudWatchCpuInactivityCollector:
             raise ValueError("target_arn must be a valid EC2 instance ARN")
 
         instance_id = match.group("instance_id")
-        region = match.group("region")
         observation_end = _latest_five_minute_boundary(claim.claim_time)
         observation_start = observation_end - timedelta(
             seconds=OBSERVATION_PERIOD_SECONDS * OBSERVATION_PERIOD_COUNT
         )
 
-        session = create_ecs_task_role_session()
-        cloudwatch_client = session.client("cloudwatch", region_name=region)
-        response = cloudwatch_client.get_metric_data(
+        response = self._cloudwatch_client.get_metric_data(
             MetricDataQueries=[
                 {
                     "Id": "cpu_utilization_average",
