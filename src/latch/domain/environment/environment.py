@@ -12,7 +12,7 @@ EC2_INSTANCE_ARN_PATTERN = re.compile(
     r"instance/"
     r"(?P<instance_id>i-[0-9a-f]{8,17})$"
 )
-MAX_RESOURCE_TARGET_ARNS = 1_000
+MAX_RESOURCE_TARGET_ARNS = 99
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +49,7 @@ class Environment:
             raise ValueError("resource_target_arns must be non-empty")
 
         if len(self.resource_target_arns) > MAX_RESOURCE_TARGET_ARNS:
-            raise ValueError("resource_target_arns must contain at most 1000 targets")
+            raise ValueError("resource_target_arns must contain at most 99 targets")
 
         account_ids: set[str] = set()
         regions: set[str] = set()

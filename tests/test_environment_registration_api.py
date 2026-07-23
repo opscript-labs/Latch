@@ -70,6 +70,31 @@ def service_failure() -> ClientError:
     )
 
 
+def transaction_conditional_failure() -> ClientError:
+    return ClientError(
+        {
+            "Error": {
+                "Code": "TransactionCanceledException",
+                "Message": "transaction cancelled",
+            },
+            "CancellationReasons": [{"Code": "ConditionalCheckFailed"}],
+        },
+        "TransactWriteItems",
+    )
+
+
+def ambiguous_transaction_failure() -> ClientError:
+    return ClientError(
+        {
+            "Error": {
+                "Code": "TransactionCanceledException",
+                "Message": "transaction cancelled",
+            }
+        },
+        "TransactWriteItems",
+    )
+
+
 def test_valid_request_returns_created_deterministic_projection() -> None:
     with configured_client() as client:
         response = client.post("/environments", json=valid_request())
@@ -138,7 +163,7 @@ def test_malformed_or_invariant_violating_environment_request_returns_422(
 
 def test_duplicate_conditional_failure_returns_409() -> None:
     dynamodb_client = Mock()
-    dynamodb_client.put_item.side_effect = conditional_failure()
+    dynamodb_client.transact_write_items.side_effect = transaction_conditional_failure()
 
     with configured_client(dynamodb_client) as client:
         response = client.post("/environments", json=valid_request())
@@ -147,10 +172,17 @@ def test_duplicate_conditional_failure_returns_409() -> None:
     assert response.json() == {"detail": "environment already registered"}
 
 
-@pytest.mark.parametrize("error", [service_failure(), EndpointConnectionError(endpoint_url="x")])
+@pytest.mark.parametrize(
+    "error",
+    [
+        service_failure(),
+        ambiguous_transaction_failure(),
+        EndpointConnectionError(endpoint_url="x"),
+    ],
+)
 def test_dynamodb_service_or_transport_failure_returns_503(error: BaseException) -> None:
     dynamodb_client = Mock()
-    dynamodb_client.put_item.side_effect = error
+    dynamodb_client.transact_write_items.side_effect = error
 
     with configured_client(dynamodb_client) as client:
         response = client.post("/environments", json=valid_request())
@@ -165,7 +197,7 @@ def test_exactly_one_registration_attempt_per_request() -> None:
     with configured_client(dynamodb_client) as client:
         client.post("/environments", json=valid_request())
 
-    dynamodb_client.put_item.assert_called_once()
+    dynamodb_client.transact_write_items.assert_called_once()
 
 
 def test_valid_startup_does_not_make_dynamodb_request() -> None:
@@ -176,6 +208,7 @@ def test_valid_startup_does_not_make_dynamodb_request() -> None:
 
     dynamodb_client.put_item.assert_not_called()
     dynamodb_client.delete_item.assert_not_called()
+    dynamodb_client.transact_write_items.assert_not_called()
 
 
 @pytest.mark.parametrize(

@@ -76,26 +76,26 @@ def test_environment_rejects_region_mismatch_targets() -> None:
         )
 
 
-def test_environment_accepts_exactly_1000_targets() -> None:
+def test_environment_accepts_99_targets() -> None:
     environment = Environment(
         identifier="env-123",
         created_at=CREATED_AT,
         ttl_expires_at=TTL_EXPIRES_AT,
         owner="team-platform",
-        resource_target_arns={ec2_instance_arn(number) for number in range(1000)},
+        resource_target_arns={ec2_instance_arn(number) for number in range(99)},
     )
 
-    assert len(environment.resource_target_arns) == 1000
+    assert len(environment.resource_target_arns) == 99
 
 
-def test_environment_rejects_1001_targets() -> None:
-    with pytest.raises(ValueError, match="1000"):
+def test_environment_rejects_100_targets() -> None:
+    with pytest.raises(ValueError, match="99"):
         Environment(
             identifier="env-123",
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-            resource_target_arns={ec2_instance_arn(number) for number in range(1001)},
+            resource_target_arns={ec2_instance_arn(number) for number in range(100)},
         )
 
 

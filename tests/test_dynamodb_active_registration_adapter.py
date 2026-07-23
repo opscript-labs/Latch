@@ -11,6 +11,7 @@ from latch.infrastructure.dynamodb_active_registration_adapter import (
     DynamoDBActiveRegistrationAdapter,
     canonical_registration_timestamp,
     immutable_registration_fingerprint,
+    target_ownership_identifier,
 )
 
 CREATED_AT = datetime(2026, 7, 23, 8, 0, tzinfo=UTC)
@@ -61,6 +62,19 @@ def conditional_failure() -> ClientError:
     )
 
 
+def transaction_conditional_failure() -> ClientError:
+    return ClientError(
+        {
+            "Error": {
+                "Code": "TransactionCanceledException",
+                "Message": "transaction cancelled",
+            },
+            "CancellationReasons": [{"Code": "ConditionalCheckFailed"}],
+        },
+        "TransactWriteItems",
+    )
+
+
 def service_failure() -> ClientError:
     return ClientError(
         {"Error": {"Code": "InternalServerError", "Message": "service unavailable"}},
@@ -74,7 +88,8 @@ def test_registration_writes_complete_immutable_record_with_fingerprint() -> Non
 
     DynamoDBActiveRegistrationAdapter(client, "active-environments").register(environment)
 
-    item = client.put_item.call_args.kwargs["Item"]
+    transaction_items = client.transact_write_items.call_args.kwargs["TransactItems"]
+    item = transaction_items[0]["Put"]["Item"]
     assert item == {
         "record_kind": {"S": ACTIVE_ENVIRONMENT_REGISTRATION_RECORD_KIND},
         "identifier": {"S": "env-123"},
@@ -84,6 +99,68 @@ def test_registration_writes_complete_immutable_record_with_fingerprint() -> Non
         "resource_target_arns": {"SS": sorted({FIRST_TARGET, SECOND_TARGET})},
         "registration_fingerprint": {"S": immutable_registration_fingerprint(environment)},
     }
+
+
+def test_registration_uses_one_transaction_with_registration_and_ownership_puts() -> None:
+    client = Mock()
+    environment = make_environment(
+        resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET})
+    )
+
+    DynamoDBActiveRegistrationAdapter(client, "active-environments").register(environment)
+
+    transact_items = client.transact_write_items.call_args.kwargs["TransactItems"]
+    assert len(transact_items) == 3
+    assert transact_items[0]["Put"]["ConditionExpression"] == (
+        "attribute_not_exists(identifier)"
+    )
+    ownership_puts = [item["Put"] for item in transact_items[1:]]
+    assert {put["Item"]["target_arn"]["S"] for put in ownership_puts} == {
+        FIRST_TARGET,
+        SECOND_TARGET,
+    }
+    assert all(
+        put["ConditionExpression"] == "attribute_not_exists(identifier)"
+        for put in ownership_puts
+    )
+
+
+def test_ownership_records_contain_exact_target_owner_and_fingerprint() -> None:
+    client = Mock()
+    environment = make_environment()
+
+    DynamoDBActiveRegistrationAdapter(client, "active-environments").register(environment)
+
+    ownership_item = client.transact_write_items.call_args.kwargs["TransactItems"][1][
+        "Put"
+    ]["Item"]
+    assert ownership_item == {
+        "identifier": {"S": target_ownership_identifier(FIRST_TARGET)},
+        "target_arn": {"S": FIRST_TARGET},
+        "owning_environment_identifier": {"S": "env-123"},
+        "owning_registration_fingerprint": {
+            "S": immutable_registration_fingerprint(environment)
+        },
+    }
+
+
+def test_ownership_keys_cannot_collide_with_environment_identifier_keys() -> None:
+    assert target_ownership_identifier(FIRST_TARGET) != FIRST_TARGET
+    assert target_ownership_identifier(FIRST_TARGET).startswith("TARGET_OWNERSHIP#")
+
+
+def test_ownership_records_omit_ttl_due_gsi_attributes() -> None:
+    client = Mock()
+
+    DynamoDBActiveRegistrationAdapter(client, "active-environments").register(
+        make_environment()
+    )
+
+    ownership_item = client.transact_write_items.call_args.kwargs["TransactItems"][1][
+        "Put"
+    ]["Item"]
+    assert "record_kind" not in ownership_item
+    assert "ttl_expires_at" not in ownership_item
 
 
 def test_canonical_index_timestamps_have_fixed_utc_microsecond_precision() -> None:
@@ -137,16 +214,22 @@ def test_creation_uses_conditional_reject_on_existing_semantics() -> None:
 
     DynamoDBActiveRegistrationAdapter(client, "active-environments").register(make_environment())
 
-    assert (
-        client.put_item.call_args.kwargs["ConditionExpression"]
-        == "attribute_not_exists(identifier)"
-    )
+    registration_put = client.transact_write_items.call_args.kwargs["TransactItems"][0][
+        "Put"
+    ]
+    assert registration_put["ConditionExpression"] == "attribute_not_exists(identifier)"
 
 
-def test_duplicate_creation_propagates_conditional_failure_without_overwrite() -> None:
+@pytest.mark.parametrize(
+    "reason",
+    ["duplicate identifier", "target already owned by another registration"],
+)
+def test_transaction_conditional_creation_failure_aborts_without_partial_writes(
+    reason: str,
+) -> None:
     client = Mock()
-    error = conditional_failure()
-    client.put_item.side_effect = error
+    error = transaction_conditional_failure()
+    client.transact_write_items.side_effect = error
 
     with pytest.raises(ClientError) as raised:
         DynamoDBActiveRegistrationAdapter(client, "active-environments").register(
@@ -154,7 +237,9 @@ def test_duplicate_creation_propagates_conditional_failure_without_overwrite() -
         )
 
     assert raised.value is error
-    client.put_item.assert_called_once()
+    client.transact_write_items.assert_called_once()
+    client.put_item.assert_not_called()
+    assert reason
 
 
 def test_successful_due_claim_returns_claim_and_writes_metadata() -> None:
@@ -293,14 +378,41 @@ def test_confirmed_matching_destruction_performs_conditional_delete() -> None:
         "active-environments",
     ).deregister_confirmed(confirmed(environment))
 
-    client.delete_item.assert_called_once_with(
-        TableName="active-environments",
-        Key={"identifier": {"S": "env-123"}},
-        ConditionExpression="registration_fingerprint = :registration_fingerprint",
-        ExpressionAttributeValues={
-            ":registration_fingerprint": {"S": immutable_registration_fingerprint(environment)}
+    transact_items = client.transact_write_items.call_args.kwargs["TransactItems"]
+    assert transact_items == [
+        {
+            "Delete": {
+                "TableName": "active-environments",
+                "Key": {"identifier": {"S": "env-123"}},
+                "ConditionExpression": (
+                    "registration_fingerprint = :registration_fingerprint"
+                ),
+                "ExpressionAttributeValues": {
+                    ":registration_fingerprint": {
+                        "S": immutable_registration_fingerprint(environment)
+                    }
+                },
+            }
         },
-    )
+        {
+            "Delete": {
+                "TableName": "active-environments",
+                "Key": {"identifier": {"S": target_ownership_identifier(FIRST_TARGET)}},
+                "ConditionExpression": (
+                    "owning_environment_identifier = "
+                    ":owning_environment_identifier AND "
+                    "owning_registration_fingerprint = "
+                    ":owning_registration_fingerprint"
+                ),
+                "ExpressionAttributeValues": {
+                    ":owning_environment_identifier": {"S": "env-123"},
+                    ":owning_registration_fingerprint": {
+                        "S": immutable_registration_fingerprint(environment)
+                    },
+                },
+            }
+        },
+    ]
 
 
 def test_non_confirmed_destruction_performs_no_dynamodb_call() -> None:
@@ -312,6 +424,7 @@ def test_non_confirmed_destruction_performs_no_dynamodb_call() -> None:
     ).deregister_confirmed(not_confirmed(make_environment()))
 
     client.delete_item.assert_not_called()
+    client.transact_write_items.assert_not_called()
 
 
 def test_stale_confirmation_cannot_delete_later_registration_with_same_identifier() -> None:
@@ -323,9 +436,9 @@ def test_stale_confirmation_cannot_delete_later_registration_with_same_identifie
         "active-environments",
     ).deregister_confirmed(confirmed(environment))
 
-    delete_kwargs = client.delete_item.call_args.kwargs
-    assert delete_kwargs["Key"] == {"identifier": {"S": "env-123"}}
-    assert delete_kwargs["ExpressionAttributeValues"] == {
+    delete = client.transact_write_items.call_args.kwargs["TransactItems"][0]["Delete"]
+    assert delete["Key"] == {"identifier": {"S": "env-123"}}
+    assert delete["ExpressionAttributeValues"] == {
         ":registration_fingerprint": {"S": immutable_registration_fingerprint(environment)}
     }
 
@@ -341,8 +454,8 @@ def test_mismatched_registration_cannot_be_deleted() -> None:
 
 def test_conditional_delete_failure_propagates_unchanged() -> None:
     client = Mock()
-    error = conditional_failure()
-    client.delete_item.side_effect = error
+    error = transaction_conditional_failure()
+    client.transact_write_items.side_effect = error
 
     with pytest.raises(ClientError) as raised:
         DynamoDBActiveRegistrationAdapter(
@@ -351,6 +464,30 @@ def test_conditional_delete_failure_propagates_unchanged() -> None:
         ).deregister_confirmed(confirmed(make_environment()))
 
     assert raised.value is error
+    client.delete_item.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "reason",
+    ["stale fingerprint", "missing reservation", "mismatched reservation"],
+)
+def test_confirmed_deregistration_transaction_failure_aborts_all_deletes(
+    reason: str,
+) -> None:
+    client = Mock()
+    error = transaction_conditional_failure()
+    client.transact_write_items.side_effect = error
+
+    with pytest.raises(ClientError) as raised:
+        DynamoDBActiveRegistrationAdapter(
+            client,
+            "active-environments",
+        ).deregister_confirmed(confirmed(make_environment()))
+
+    assert raised.value is error
+    client.transact_write_items.assert_called_once()
+    client.delete_item.assert_not_called()
+    assert reason
 
 
 def test_adapter_does_not_mutate_environment_or_confirmation_inputs() -> None:
@@ -367,6 +504,19 @@ def test_adapter_does_not_mutate_environment_or_confirmation_inputs() -> None:
     assert environment.resource_target_arns == targets
     assert confirmation.environment == environment
     assert confirmation.reported_states == reported_states
+
+
+def test_target_reuse_succeeds_after_confirmed_deregistration() -> None:
+    client = Mock()
+    adapter = DynamoDBActiveRegistrationAdapter(client, "active-environments")
+    first = make_environment(identifier="env-123")
+    second = make_environment(identifier="env-456")
+
+    adapter.register(first)
+    adapter.deregister_confirmed(confirmed(first))
+    adapter.register(second)
+
+    assert client.transact_write_items.call_count == 3
 
 
 def test_blank_table_name_is_rejected() -> None:

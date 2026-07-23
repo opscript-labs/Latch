@@ -88,8 +88,7 @@ def register_environment(
     try:
         adapter.register(environment)
     except ClientError as error:
-        error_code = error.response.get("Error", {}).get("Code")
-        if error_code == "ConditionalCheckFailedException":
+        if _is_conditional_registration_conflict(error):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="environment already registered",
@@ -133,6 +132,24 @@ def _required_env(name: str) -> str:
         raise RuntimeError(f"{name} is required")
 
     return value.strip()
+
+
+def _is_conditional_registration_conflict(error: ClientError) -> bool:
+    error_code = error.response.get("Error", {}).get("Code")
+    if error_code == "ConditionalCheckFailedException":
+        return True
+
+    if error_code != "TransactionCanceledException":
+        return False
+
+    cancellation_reasons = error.response.get("CancellationReasons")
+    if not isinstance(cancellation_reasons, list):
+        return False
+
+    return any(
+        isinstance(reason, dict) and reason.get("Code") == "ConditionalCheckFailed"
+        for reason in cancellation_reasons
+    )
 
 
 def _environment_response(environment: Environment) -> EnvironmentRegistrationResponse:

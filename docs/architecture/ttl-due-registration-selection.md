@@ -15,6 +15,9 @@ to the canonical selection time.
 Each returned record must reconstruct the immutable `Environment` exactly and
 must match the deterministic immutable-registration fingerprint. Malformed,
 inconsistent, or non-reconstructable records fail the selection operation.
+Target ownership reservation records do not contain the active-registration GSI
+attributes and must not be returned by TTL-due registration selection or
+reconstructed as Environments.
 
 `TtlDueEnvironmentSelection` contains the normalized UTC selection time, an
 immutable unordered set of reconstructed Environments from one DynamoDB query

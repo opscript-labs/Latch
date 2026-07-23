@@ -13,6 +13,7 @@ from latch.domain.execution import (
 )
 
 ACTIVE_ENVIRONMENT_REGISTRATION_RECORD_KIND = "ACTIVE_ENVIRONMENT_REGISTRATION"
+TARGET_OWNERSHIP_KEY_PREFIX = "TARGET_OWNERSHIP#"
 
 
 class DynamoDBActiveRegistrationAdapter:
@@ -27,10 +28,26 @@ class DynamoDBActiveRegistrationAdapter:
         if not isinstance(environment, Environment):
             raise ValueError("environment must be an Environment")
 
-        self._dynamodb_client.put_item(
-            TableName=self._table_name,
-            Item=_item_for_environment(environment),
-            ConditionExpression="attribute_not_exists(identifier)",
+        self._dynamodb_client.transact_write_items(
+            TransactItems=[
+                {
+                    "Put": {
+                        "TableName": self._table_name,
+                        "Item": _item_for_environment(environment),
+                        "ConditionExpression": "attribute_not_exists(identifier)",
+                    }
+                },
+                *[
+                    {
+                        "Put": {
+                            "TableName": self._table_name,
+                            "Item": _ownership_item_for_target(environment, target_arn),
+                            "ConditionExpression": "attribute_not_exists(identifier)",
+                        }
+                    }
+                    for target_arn in sorted(environment.resource_target_arns)
+                ],
+            ],
         )
 
     def acquire_retirement_evaluation_claim(
@@ -81,13 +98,50 @@ class DynamoDBActiveRegistrationAdapter:
             return
 
         environment = confirmation.environment
-        self._dynamodb_client.delete_item(
-            TableName=self._table_name,
-            Key={"identifier": {"S": environment.identifier}},
-            ConditionExpression="registration_fingerprint = :registration_fingerprint",
-            ExpressionAttributeValues={
-                ":registration_fingerprint": {"S": immutable_registration_fingerprint(environment)}
-            },
+        self._dynamodb_client.transact_write_items(
+            TransactItems=[
+                {
+                    "Delete": {
+                        "TableName": self._table_name,
+                        "Key": {"identifier": {"S": environment.identifier}},
+                        "ConditionExpression": (
+                            "registration_fingerprint = :registration_fingerprint"
+                        ),
+                        "ExpressionAttributeValues": {
+                            ":registration_fingerprint": {
+                                "S": immutable_registration_fingerprint(environment)
+                            }
+                        },
+                    }
+                },
+                *[
+                    {
+                        "Delete": {
+                            "TableName": self._table_name,
+                            "Key": {
+                                "identifier": {
+                                    "S": target_ownership_identifier(target_arn)
+                                }
+                            },
+                            "ConditionExpression": (
+                                "owning_environment_identifier = "
+                                ":owning_environment_identifier AND "
+                                "owning_registration_fingerprint = "
+                                ":owning_registration_fingerprint"
+                            ),
+                            "ExpressionAttributeValues": {
+                                ":owning_environment_identifier": {
+                                    "S": environment.identifier
+                                },
+                                ":owning_registration_fingerprint": {
+                                    "S": immutable_registration_fingerprint(environment)
+                                },
+                            },
+                        }
+                    }
+                    for target_arn in sorted(environment.resource_target_arns)
+                ],
+            ],
         )
 
 
@@ -121,6 +175,24 @@ def _item_for_environment(environment: Environment) -> dict[str, Any]:
             "S": immutable_registration_fingerprint(environment),
         },
     }
+
+
+def _ownership_item_for_target(
+    environment: Environment,
+    target_arn: str,
+) -> dict[str, Any]:
+    return {
+        "identifier": {"S": target_ownership_identifier(target_arn)},
+        "target_arn": {"S": target_arn},
+        "owning_environment_identifier": {"S": environment.identifier},
+        "owning_registration_fingerprint": {
+            "S": immutable_registration_fingerprint(environment),
+        },
+    }
+
+
+def target_ownership_identifier(target_arn: str) -> str:
+    return f"{TARGET_OWNERSHIP_KEY_PREFIX}{target_arn}"
 
 
 def canonical_registration_timestamp(value: datetime) -> str:

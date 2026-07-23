@@ -9,6 +9,7 @@ from latch.infrastructure.dynamodb_active_registration_adapter import (
     ACTIVE_ENVIRONMENT_REGISTRATION_RECORD_KIND,
     canonical_registration_timestamp,
     immutable_registration_fingerprint,
+    target_ownership_identifier,
 )
 from latch.infrastructure.dynamodb_ttl_due_registration_query_adapter import (
     TTL_DUE_REGISTRATION_INDEX_NAME,
@@ -152,6 +153,23 @@ def test_target_ordering_does_not_affect_reconstructed_environment_identity() ->
 def test_malformed_item_fails_query_operation() -> None:
     client = Mock()
     client.query.return_value = {"Items": [{"identifier": {"S": "env-123"}}]}
+
+    with pytest.raises(ValueError):
+        query_adapter(client).select_due(SELECTION_TIME)
+
+
+def test_ownership_record_is_not_reconstructed_as_environment() -> None:
+    client = Mock()
+    client.query.return_value = {
+        "Items": [
+            {
+                "identifier": {"S": target_ownership_identifier(FIRST_TARGET)},
+                "target_arn": {"S": FIRST_TARGET},
+                "owning_environment_identifier": {"S": "env-123"},
+                "owning_registration_fingerprint": {"S": "fingerprint"},
+            }
+        ]
+    }
 
     with pytest.raises(ValueError):
         query_adapter(client).select_due(SELECTION_TIME)
