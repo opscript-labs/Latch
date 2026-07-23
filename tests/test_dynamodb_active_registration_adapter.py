@@ -4,7 +4,13 @@ from unittest.mock import Mock, patch
 import pytest
 from botocore.exceptions import ClientError
 
+from latch.domain.admission import (
+    AdmissionEvaluationContext,
+    AdmissionRequest,
+    OwnerRetirementApproval,
+)
 from latch.domain.environment import Environment
+from latch.domain.environment.retirement_evaluation_claim import RetirementEvaluationClaim
 from latch.domain.execution import EC2DestructionConfirmation, EC2InstanceLifecycleState
 from latch.infrastructure.dynamodb_active_registration_adapter import (
     ACTIVE_ENVIRONMENT_REGISTRATION_RECORD_KIND,
@@ -48,6 +54,56 @@ def confirmed(environment: Environment) -> EC2DestructionConfirmation:
 
 def not_confirmed(environment: Environment) -> EC2DestructionConfirmation:
     return EC2DestructionConfirmation(environment=environment, reported_states=[])
+
+
+def make_claim(environment: Environment | None = None) -> RetirementEvaluationClaim:
+    if environment is None:
+        environment = make_environment()
+
+    with patch(
+        "latch.domain.environment.retirement_evaluation_claim.uuid.uuid4",
+        return_value="claim-token",
+    ):
+        return RetirementEvaluationClaim(environment, TTL_EXPIRES_AT)
+
+
+def make_context(claim: RetirementEvaluationClaim) -> AdmissionEvaluationContext:
+    return AdmissionEvaluationContext(
+        environment=claim.environment,
+        requested_retirement=AdmissionRequest.RETIREMENT,
+        evaluated_at=claim.claim_time,
+    )
+
+
+def make_approval(claim: RetirementEvaluationClaim) -> OwnerRetirementApproval:
+    return OwnerRetirementApproval(
+        context=make_context(claim),
+        approved_by=claim.environment.owner,
+    )
+
+
+def active_item_for_claim(
+    claim: RetirementEvaluationClaim,
+    *,
+    include_approval: bool = False,
+) -> dict[str, object]:
+    item = {
+        "identifier": {"S": claim.environment.identifier},
+        "owner": {"S": claim.environment.owner},
+        "registration_fingerprint": {"S": immutable_registration_fingerprint(claim.environment)},
+        "evaluation_claim_token": {"S": claim.claim_token},
+        "evaluation_claim_time": {"S": canonical_registration_timestamp(claim.claim_time)},
+    }
+    if include_approval:
+        item.update(
+            {
+                "approval_claim_token": {"S": claim.claim_token},
+                "approval_claim_time": {"S": canonical_registration_timestamp(claim.claim_time)},
+                "approved_action": {"S": "retirement"},
+                "approved_by": {"S": claim.environment.owner},
+            }
+        )
+    return item
 
 
 def conditional_failure() -> ClientError:
@@ -103,25 +159,20 @@ def test_registration_writes_complete_immutable_record_with_fingerprint() -> Non
 
 def test_registration_uses_one_transaction_with_registration_and_ownership_puts() -> None:
     client = Mock()
-    environment = make_environment(
-        resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET})
-    )
+    environment = make_environment(resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET}))
 
     DynamoDBActiveRegistrationAdapter(client, "active-environments").register(environment)
 
     transact_items = client.transact_write_items.call_args.kwargs["TransactItems"]
     assert len(transact_items) == 3
-    assert transact_items[0]["Put"]["ConditionExpression"] == (
-        "attribute_not_exists(identifier)"
-    )
+    assert transact_items[0]["Put"]["ConditionExpression"] == ("attribute_not_exists(identifier)")
     ownership_puts = [item["Put"] for item in transact_items[1:]]
     assert {put["Item"]["target_arn"]["S"] for put in ownership_puts} == {
         FIRST_TARGET,
         SECOND_TARGET,
     }
     assert all(
-        put["ConditionExpression"] == "attribute_not_exists(identifier)"
-        for put in ownership_puts
+        put["ConditionExpression"] == "attribute_not_exists(identifier)" for put in ownership_puts
     )
 
 
@@ -131,16 +182,12 @@ def test_ownership_records_contain_exact_target_owner_and_fingerprint() -> None:
 
     DynamoDBActiveRegistrationAdapter(client, "active-environments").register(environment)
 
-    ownership_item = client.transact_write_items.call_args.kwargs["TransactItems"][1][
-        "Put"
-    ]["Item"]
+    ownership_item = client.transact_write_items.call_args.kwargs["TransactItems"][1]["Put"]["Item"]
     assert ownership_item == {
         "identifier": {"S": target_ownership_identifier(FIRST_TARGET)},
         "target_arn": {"S": FIRST_TARGET},
         "owning_environment_identifier": {"S": "env-123"},
-        "owning_registration_fingerprint": {
-            "S": immutable_registration_fingerprint(environment)
-        },
+        "owning_registration_fingerprint": {"S": immutable_registration_fingerprint(environment)},
     }
 
 
@@ -152,13 +199,9 @@ def test_ownership_keys_cannot_collide_with_environment_identifier_keys() -> Non
 def test_ownership_records_omit_ttl_due_gsi_attributes() -> None:
     client = Mock()
 
-    DynamoDBActiveRegistrationAdapter(client, "active-environments").register(
-        make_environment()
-    )
+    DynamoDBActiveRegistrationAdapter(client, "active-environments").register(make_environment())
 
-    ownership_item = client.transact_write_items.call_args.kwargs["TransactItems"][1][
-        "Put"
-    ]["Item"]
+    ownership_item = client.transact_write_items.call_args.kwargs["TransactItems"][1]["Put"]["Item"]
     assert "record_kind" not in ownership_item
     assert "ttl_expires_at" not in ownership_item
 
@@ -214,9 +257,7 @@ def test_creation_uses_conditional_reject_on_existing_semantics() -> None:
 
     DynamoDBActiveRegistrationAdapter(client, "active-environments").register(make_environment())
 
-    registration_put = client.transact_write_items.call_args.kwargs["TransactItems"][0][
-        "Put"
-    ]
+    registration_put = client.transact_write_items.call_args.kwargs["TransactItems"][0]["Put"]
     assert registration_put["ConditionExpression"] == "attribute_not_exists(identifier)"
 
 
@@ -369,6 +410,219 @@ def test_claim_acquisition_does_not_mutate_environment_input() -> None:
     assert environment.ttl_expires_at == TTL_EXPIRES_AT
 
 
+def test_successful_owner_approval_issuance_uses_exact_conditions() -> None:
+    client = Mock()
+    claim = make_claim()
+    approval = make_approval(claim)
+
+    issued = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).issue_owner_retirement_approval(claim, approval)
+
+    assert issued == approval
+    update_kwargs = client.update_item.call_args.kwargs
+    assert update_kwargs["Key"] == {"identifier": {"S": "env-123"}}
+    assert update_kwargs["UpdateExpression"] == (
+        "SET approval_claim_token = :approval_claim_token, "
+        "approval_claim_time = :approval_claim_time, "
+        "approved_action = :approved_action, "
+        "approved_by = :approved_by"
+    )
+    assert (
+        "registration_fingerprint = :registration_fingerprint"
+        in (update_kwargs["ConditionExpression"])
+    )
+    assert (
+        "evaluation_claim_token = :evaluation_claim_token" in (update_kwargs["ConditionExpression"])
+    )
+    assert (
+        "evaluation_claim_time = :evaluation_claim_time" in (update_kwargs["ConditionExpression"])
+    )
+    assert "owner = :approved_by" in update_kwargs["ConditionExpression"]
+    assert update_kwargs["ExpressionAttributeValues"] == {
+        ":registration_fingerprint": {"S": immutable_registration_fingerprint(claim.environment)},
+        ":evaluation_claim_token": {"S": "claim-token"},
+        ":evaluation_claim_time": {"S": "2026-07-23T10:00:00.000000Z"},
+        ":approval_claim_token": {"S": "claim-token"},
+        ":approval_claim_time": {"S": "2026-07-23T10:00:00.000000Z"},
+        ":approved_action": {"S": "retirement"},
+        ":approved_by": {"S": "team-platform"},
+    }
+
+
+def test_stored_approval_fields_do_not_affect_fingerprint_or_gsi_attributes() -> None:
+    claim = make_claim()
+    before = immutable_registration_fingerprint(claim.environment)
+    item = active_item_for_claim(claim, include_approval=True)
+
+    assert immutable_registration_fingerprint(claim.environment) == before
+    assert "record_kind" not in {
+        "approval_claim_token",
+        "approval_claim_time",
+        "approved_action",
+        "approved_by",
+    }
+    assert "ttl_expires_at" not in {
+        "approval_claim_token",
+        "approval_claim_time",
+        "approved_action",
+        "approved_by",
+    }
+    assert item["approval_claim_token"] == {"S": "claim-token"}
+
+
+def test_duplicate_owner_approval_issuance_is_idempotent() -> None:
+    client = Mock()
+    claim = make_claim()
+    approval = make_approval(claim)
+
+    first = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).issue_owner_retirement_approval(claim, approval)
+    second = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).issue_owner_retirement_approval(claim, approval)
+
+    assert first == second
+    assert client.update_item.call_count == 2
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "conflicting approval state",
+        "stale fingerprint",
+        "mismatched claim token",
+        "mismatched claim time",
+        "mismatched owner",
+    ],
+)
+def test_owner_approval_issuance_condition_failure_rejects_without_extra_mutation(
+    reason: str,
+) -> None:
+    client = Mock()
+    error = conditional_failure()
+    client.update_item.side_effect = error
+
+    with pytest.raises(ClientError) as raised:
+        DynamoDBActiveRegistrationAdapter(
+            client,
+            "active-environments",
+        ).issue_owner_retirement_approval(make_claim(), make_approval(make_claim()))
+
+    assert raised.value is error
+    client.update_item.assert_called_once()
+    client.put_item.assert_not_called()
+    client.delete_item.assert_not_called()
+    client.transact_write_items.assert_not_called()
+    assert reason
+
+
+def test_owner_approval_issuance_rejects_context_mismatch_before_write() -> None:
+    client = Mock()
+    claim = make_claim()
+    other_claim = make_claim(make_environment(identifier="env-456"))
+    approval = make_approval(other_claim)
+
+    with pytest.raises(ValueError, match="Environment"):
+        DynamoDBActiveRegistrationAdapter(
+            client,
+            "active-environments",
+        ).issue_owner_retirement_approval(claim, approval)
+
+    client.update_item.assert_not_called()
+
+
+def test_retrieval_returns_absence_only_for_matching_registration_without_approval() -> None:
+    client = Mock()
+    claim = make_claim()
+    client.get_item.return_value = {"Item": active_item_for_claim(claim)}
+
+    approval = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).retrieve_owner_retirement_approval(claim, make_context(claim))
+
+    assert approval is None
+
+
+def test_retrieval_reconstructs_only_exact_matching_approval() -> None:
+    client = Mock()
+    claim = make_claim()
+    client.get_item.return_value = {"Item": active_item_for_claim(claim, include_approval=True)}
+
+    approval = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).retrieve_owner_retirement_approval(claim, make_context(claim))
+
+    assert approval == make_approval(claim)
+    assert approval is not None
+    assert approval.approved_by == "team-platform"
+
+
+@pytest.mark.parametrize(
+    "item_update",
+    [
+        None,
+        {"registration_fingerprint": {"S": "stale"}},
+        {"evaluation_claim_token": {"S": "other-token"}},
+        {"evaluation_claim_time": {"S": "2026-07-23T10:00:00.000001Z"}},
+        {"approval_claim_token": {"S": "claim-token"}},
+        {
+            "approval_claim_token": {"S": "claim-token"},
+            "approval_claim_time": {"S": "2026-07-23T10:00:00.000000Z"},
+            "approved_action": {"S": "retirement"},
+            "approved_by": {"S": "team-security"},
+        },
+        {
+            "approval_claim_token": {"S": "claim-token"},
+            "approval_claim_time": {"S": "2026-07-23T10:00:00.000000Z"},
+            "approved_action": {"S": "rotation"},
+            "approved_by": {"S": "team-platform"},
+        },
+    ],
+)
+def test_retrieval_rejects_missing_stale_partial_or_malformed_state(
+    item_update: dict[str, object] | None,
+) -> None:
+    client = Mock()
+    claim = make_claim()
+    if item_update is None:
+        client.get_item.return_value = {}
+    else:
+        item = active_item_for_claim(claim)
+        item.update(item_update)
+        client.get_item.return_value = {"Item": item}
+
+    with pytest.raises(ValueError):
+        DynamoDBActiveRegistrationAdapter(
+            client,
+            "active-environments",
+        ).retrieve_owner_retirement_approval(claim, make_context(claim))
+
+
+def test_retrieval_rejects_context_mismatch_before_read() -> None:
+    client = Mock()
+    claim = make_claim()
+    mismatched_context = AdmissionEvaluationContext(
+        environment=claim.environment,
+        requested_retirement=AdmissionRequest.RETIREMENT,
+        evaluated_at=claim.claim_time + timedelta(seconds=1),
+    )
+
+    with pytest.raises(ValueError, match="evaluated_at"):
+        DynamoDBActiveRegistrationAdapter(
+            client,
+            "active-environments",
+        ).retrieve_owner_retirement_approval(claim, mismatched_context)
+
+    client.get_item.assert_not_called()
+
+
 def test_confirmed_matching_destruction_performs_conditional_delete() -> None:
     client = Mock()
     environment = make_environment()
@@ -384,9 +638,7 @@ def test_confirmed_matching_destruction_performs_conditional_delete() -> None:
             "Delete": {
                 "TableName": "active-environments",
                 "Key": {"identifier": {"S": "env-123"}},
-                "ConditionExpression": (
-                    "registration_fingerprint = :registration_fingerprint"
-                ),
+                "ConditionExpression": ("registration_fingerprint = :registration_fingerprint"),
                 "ExpressionAttributeValues": {
                     ":registration_fingerprint": {
                         "S": immutable_registration_fingerprint(environment)

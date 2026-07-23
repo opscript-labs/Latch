@@ -228,7 +228,8 @@ def test_missing_required_configuration_value_prevents_startup(
     with (
         patch.dict(os.environ, environment, clear=True),
         patch("latch.main.create_ecs_task_role_session", return_value=Mock()),
-        pytest.raises(RuntimeError, match=missing_name),TestClient(app)
+        pytest.raises(RuntimeError, match=missing_name),
+        TestClient(app),
     ):
         pass
 
@@ -255,7 +256,8 @@ def test_blank_or_invalid_configuration_value_prevents_startup(
     with (
         patch.dict(os.environ, environment, clear=True),
         patch("latch.main.create_ecs_task_role_session", return_value=Mock()),
-        pytest.raises(RuntimeError),TestClient(app)
+        pytest.raises(RuntimeError),
+        TestClient(app),
     ):
         pass
 
@@ -270,7 +272,8 @@ def test_invalid_ecs_credential_source_configuration_prevents_startup() -> None:
             },
             clear=True,
         ),
-        pytest.raises(RuntimeError, match="ECS task-role credentials"),TestClient(app)
+        pytest.raises(RuntimeError, match="ECS task-role credentials"),
+        TestClient(app),
     ):
         pass
 
@@ -294,3 +297,9 @@ def test_health_endpoint_remains_available_with_valid_configuration() -> None:
         "version": "0.1.0",
         "status": "healthy",
     }
+
+
+def test_owner_approval_has_no_external_api_route() -> None:
+    routes = {(route.path, ",".join(sorted(route.methods or []))) for route in app.routes}
+
+    assert not any("approval" in path for path, _ in routes)

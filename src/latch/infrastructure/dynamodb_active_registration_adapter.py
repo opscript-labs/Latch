@@ -5,6 +5,10 @@ from typing import Any
 
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
+from latch.domain.admission import (
+    AdmissionRequest,
+    OwnerRetirementApproval,
+)
 from latch.domain.environment import Environment
 from latch.domain.environment.retirement_evaluation_claim import RetirementEvaluationClaim
 from latch.domain.execution import (
@@ -118,11 +122,7 @@ class DynamoDBActiveRegistrationAdapter:
                     {
                         "Delete": {
                             "TableName": self._table_name,
-                            "Key": {
-                                "identifier": {
-                                    "S": target_ownership_identifier(target_arn)
-                                }
-                            },
+                            "Key": {"identifier": {"S": target_ownership_identifier(target_arn)}},
                             "ConditionExpression": (
                                 "owning_environment_identifier = "
                                 ":owning_environment_identifier AND "
@@ -130,9 +130,7 @@ class DynamoDBActiveRegistrationAdapter:
                                 ":owning_registration_fingerprint"
                             ),
                             "ExpressionAttributeValues": {
-                                ":owning_environment_identifier": {
-                                    "S": environment.identifier
-                                },
+                                ":owning_environment_identifier": {"S": environment.identifier},
                                 ":owning_registration_fingerprint": {
                                     "S": immutable_registration_fingerprint(environment)
                                 },
@@ -143,6 +141,100 @@ class DynamoDBActiveRegistrationAdapter:
                 ],
             ],
         )
+
+    def issue_owner_retirement_approval(
+        self,
+        claim: RetirementEvaluationClaim,
+        approval: OwnerRetirementApproval,
+    ) -> OwnerRetirementApproval:
+        _validate_approval_inputs(claim, approval)
+        environment = claim.environment
+        expression_values = _approval_expression_values(claim, approval)
+
+        self._dynamodb_client.update_item(
+            TableName=self._table_name,
+            Key={"identifier": {"S": environment.identifier}},
+            UpdateExpression=(
+                "SET approval_claim_token = :approval_claim_token, "
+                "approval_claim_time = :approval_claim_time, "
+                "approved_action = :approved_action, "
+                "approved_by = :approved_by"
+            ),
+            ConditionExpression=(
+                "registration_fingerprint = :registration_fingerprint AND "
+                "evaluation_claim_token = :evaluation_claim_token AND "
+                "evaluation_claim_time = :evaluation_claim_time AND "
+                "owner = :approved_by AND "
+                "("
+                "(attribute_not_exists(approval_claim_token) AND "
+                "attribute_not_exists(approval_claim_time) AND "
+                "attribute_not_exists(approved_action) AND "
+                "attribute_not_exists(approved_by)) OR "
+                "(approval_claim_token = :approval_claim_token AND "
+                "approval_claim_time = :approval_claim_time AND "
+                "approved_action = :approved_action AND "
+                "approved_by = :approved_by)"
+                ")"
+            ),
+            ExpressionAttributeValues=expression_values,
+        )
+
+        return OwnerRetirementApproval(
+            context=approval.context,
+            approved_by=approval.approved_by,
+        )
+
+    def retrieve_owner_retirement_approval(
+        self,
+        claim: RetirementEvaluationClaim,
+        context: Any,
+    ) -> OwnerRetirementApproval | None:
+        _validate_claim_context(claim, context)
+        response = self._dynamodb_client.get_item(
+            TableName=self._table_name,
+            Key={"identifier": {"S": claim.environment.identifier}},
+        )
+        item = response.get("Item")
+        if not isinstance(item, dict):
+            raise ValueError("active registration is missing")
+
+        _validate_registration_item_for_claim(item, claim)
+
+        approval_fields = {
+            name
+            for name in (
+                "approval_claim_token",
+                "approval_claim_time",
+                "approved_action",
+                "approved_by",
+            )
+            if name in item
+        }
+        if not approval_fields:
+            return None
+
+        if approval_fields != {
+            "approval_claim_token",
+            "approval_claim_time",
+            "approved_action",
+            "approved_by",
+        }:
+            raise ValueError("stored approval state is partial")
+
+        approval_claim_token = _required_item_string(item, "approval_claim_token")
+        approval_claim_time = _required_item_string(item, "approval_claim_time")
+        approved_action = _required_item_string(item, "approved_action")
+        approved_by = _required_item_string(item, "approved_by")
+
+        if (
+            approval_claim_token != claim.claim_token
+            or approval_claim_time != canonical_registration_timestamp(claim.claim_time)
+            or approved_action != AdmissionRequest.RETIREMENT.value
+            or approved_by != claim.environment.owner
+        ):
+            raise ValueError("stored approval state does not match claim and context")
+
+        return OwnerRetirementApproval(context=context, approved_by=approved_by)
 
 
 def immutable_registration_fingerprint(environment: Environment) -> str:
@@ -193,6 +285,84 @@ def _ownership_item_for_target(
 
 def target_ownership_identifier(target_arn: str) -> str:
     return f"{TARGET_OWNERSHIP_KEY_PREFIX}{target_arn}"
+
+
+def _validate_approval_inputs(
+    claim: RetirementEvaluationClaim,
+    approval: OwnerRetirementApproval,
+) -> None:
+    if not isinstance(approval, OwnerRetirementApproval):
+        raise ValueError("approval must be an OwnerRetirementApproval")
+
+    _validate_claim_context(claim, approval.context)
+
+    if approval.approved_by != claim.environment.owner:
+        raise ValueError("approved_by must match the environment owner")
+
+
+def _validate_claim_context(claim: RetirementEvaluationClaim, context: Any) -> None:
+    if not isinstance(claim, RetirementEvaluationClaim):
+        raise ValueError("claim must be a RetirementEvaluationClaim")
+
+    if context.environment != claim.environment:
+        raise ValueError("context Environment must match claim")
+
+    if context.requested_retirement is not AdmissionRequest.RETIREMENT:
+        raise ValueError("context requested_retirement must be retirement")
+
+    if context.evaluated_at != claim.claim_time:
+        raise ValueError("context evaluated_at must match claim_time")
+
+
+def _approval_expression_values(
+    claim: RetirementEvaluationClaim,
+    approval: OwnerRetirementApproval,
+) -> dict[str, Any]:
+    return {
+        ":registration_fingerprint": {"S": immutable_registration_fingerprint(claim.environment)},
+        ":evaluation_claim_token": {"S": claim.claim_token},
+        ":evaluation_claim_time": {"S": canonical_registration_timestamp(claim.claim_time)},
+        ":approval_claim_token": {"S": claim.claim_token},
+        ":approval_claim_time": {"S": canonical_registration_timestamp(claim.claim_time)},
+        ":approved_action": {"S": approval.context.requested_retirement.value},
+        ":approved_by": {"S": approval.approved_by},
+    }
+
+
+def _validate_registration_item_for_claim(
+    item: dict[str, Any],
+    claim: RetirementEvaluationClaim,
+) -> None:
+    if _required_item_string(item, "identifier") != claim.environment.identifier:
+        raise ValueError("active registration identifier does not match claim")
+
+    if _required_item_string(item, "registration_fingerprint") != (
+        immutable_registration_fingerprint(claim.environment)
+    ):
+        raise ValueError("active registration fingerprint does not match claim")
+
+    if _required_item_string(item, "evaluation_claim_token") != claim.claim_token:
+        raise ValueError("active registration claim token does not match claim")
+
+    if _required_item_string(item, "evaluation_claim_time") != (
+        canonical_registration_timestamp(claim.claim_time)
+    ):
+        raise ValueError("active registration claim time does not match claim")
+
+    if _required_item_string(item, "owner") != claim.environment.owner:
+        raise ValueError("active registration owner does not match claim")
+
+
+def _required_item_string(item: dict[str, Any], name: str) -> str:
+    try:
+        value = item[name]["S"]
+    except (KeyError, TypeError) as error:
+        raise ValueError(f"active registration {name} must be present") from error
+
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"active registration {name} must be a non-empty string")
+
+    return value
 
 
 def canonical_registration_timestamp(value: datetime) -> str:
