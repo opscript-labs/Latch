@@ -6,6 +6,8 @@ import pytest
 from botocore.exceptions import EndpointConnectionError
 
 from latch.domain.admission import (
+    AdmissionEvaluationContext,
+    AdmissionRequest,
     EvidencePropositionClassification,
     EvidencePropositionClassificationAssociation,
     OperationalDimension,
@@ -221,6 +223,42 @@ def test_valid_collection_progresses_to_network_activity_association() -> None:
     )
     assert not isinstance(association, OperationalRetirementReadiness)
     assert not isinstance(association, RetirementAdmissionVerdict)
+
+
+def test_network_progression_uses_supplied_matching_context() -> None:
+    collector = Mock()
+    collector.collect.return_value = make_collected_association()
+    claim = make_claim()
+    context = AdmissionEvaluationContext(
+        claim.environment,
+        AdmissionRequest.RETIREMENT,
+        claim.claim_time,
+    )
+
+    association = CloudWatchNetworkInactivityProgression(collector).progress(
+        claim,
+        TARGET,
+        context,
+    )
+
+    assert association is not None
+    assert association.establishment.projection.context is context
+
+
+def test_network_progression_rejects_supplied_context_mismatch() -> None:
+    collector = Mock()
+    collector.collect.return_value = make_collected_association()
+    claim = make_claim()
+    context = AdmissionEvaluationContext(
+        claim.environment,
+        AdmissionRequest.RETIREMENT,
+        claim.claim_time + timedelta(seconds=1),
+    )
+
+    with pytest.raises(ValueError, match="evaluated_at"):
+        CloudWatchNetworkInactivityProgression(collector).progress(claim, TARGET, context)
+
+    collector.collect.assert_not_called()
 
 
 @pytest.mark.parametrize(

@@ -4,6 +4,8 @@ from unittest.mock import Mock
 import pytest
 
 from latch.domain.admission import (
+    AdmissionEvaluationContext,
+    AdmissionRequest,
     EvidencePropositionClassification,
     EvidencePropositionClassificationAssociation,
     OperationalAssertionOutcome,
@@ -101,6 +103,38 @@ def test_derived_context_uses_claim_time_as_evaluated_at() -> None:
     assert association is not None
     assert association.establishment.projection.context.environment == claim.environment
     assert association.establishment.projection.context.evaluated_at == claim.claim_time
+
+
+def test_supplied_matching_context_is_used() -> None:
+    collector = Mock()
+    collector.collect.return_value = make_association()
+    claim = make_claim()
+    context = AdmissionEvaluationContext(
+        claim.environment,
+        AdmissionRequest.RETIREMENT,
+        claim.claim_time,
+    )
+
+    association = progression_with_collector(collector).progress(claim, TARGET, context)
+
+    assert association is not None
+    assert association.establishment.projection.context is context
+
+
+def test_supplied_context_must_match_claim_environment_and_time() -> None:
+    collector = Mock()
+    collector.collect.return_value = make_association()
+    claim = make_claim()
+    mismatched_context = AdmissionEvaluationContext(
+        claim.environment,
+        AdmissionRequest.RETIREMENT,
+        claim.claim_time + timedelta(seconds=1),
+    )
+
+    with pytest.raises(ValueError, match="evaluated_at"):
+        progression_with_collector(collector).progress(claim, TARGET, mismatched_context)
+
+    collector.collect.assert_not_called()
 
 
 def test_non_affirmative_collection_produces_no_dimension_association() -> None:

@@ -21,6 +21,7 @@ class CloudWatchCpuInactivityProgression:
         self,
         claim: RetirementEvaluationClaim,
         target_arn: str,
+        context: AdmissionEvaluationContext | None = None,
     ) -> OperationalDimensionAssociation | None:
         if not isinstance(claim, RetirementEvaluationClaim):
             raise ValueError("claim must be a RetirementEvaluationClaim")
@@ -28,15 +29,19 @@ class CloudWatchCpuInactivityProgression:
         if target_arn not in claim.environment.resource_target_arns:
             raise ValueError("target_arn must be registered in the claim Environment")
 
+        if context is None:
+            context = AdmissionEvaluationContext(
+                environment=claim.environment,
+                requested_retirement=AdmissionRequest.RETIREMENT,
+                evaluated_at=claim.claim_time,
+            )
+        else:
+            _validate_context_for_claim(context, claim)
+
         association = self._collector.collect(claim, target_arn)
         if association is None:
             return None
 
-        context = AdmissionEvaluationContext(
-            environment=claim.environment,
-            requested_retirement=AdmissionRequest.RETIREMENT,
-            evaluated_at=claim.claim_time,
-        )
         projection = OperationalAssertionProjection(
             association=association,
             context=context,
@@ -52,3 +57,17 @@ class CloudWatchCpuInactivityProgression:
             establishment=establishment,
             dimension=OperationalDimension.CPU_ACTIVITY,
         )
+
+
+def _validate_context_for_claim(
+    context: AdmissionEvaluationContext,
+    claim: RetirementEvaluationClaim,
+) -> None:
+    if not isinstance(context, AdmissionEvaluationContext):
+        raise ValueError("context must be an AdmissionEvaluationContext")
+
+    if context.environment != claim.environment:
+        raise ValueError("context Environment must match claim")
+
+    if context.evaluated_at != claim.claim_time:
+        raise ValueError("context evaluated_at must match claim_time")
