@@ -8,6 +8,7 @@ from latch.domain.admission import (
     AdmissionEvaluationContext,
     AdmissionRequest,
     OwnerRetirementApproval,
+    RetirementLock,
 )
 from latch.domain.environment import Environment
 from latch.domain.environment.retirement_evaluation_claim import RetirementEvaluationClaim
@@ -103,6 +104,21 @@ def active_item_for_claim(
                 "approved_by": {"S": claim.environment.owner},
             }
         )
+    return item
+
+
+def active_item_for_environment(
+    environment: Environment,
+    *,
+    include_lock: bool = False,
+) -> dict[str, object]:
+    item = {
+        "identifier": {"S": environment.identifier},
+        "owner": {"S": environment.owner},
+        "registration_fingerprint": {"S": immutable_registration_fingerprint(environment)},
+    }
+    if include_lock:
+        item["retirement_lock_state"] = {"S": "locked"}
     return item
 
 
@@ -621,6 +637,156 @@ def test_retrieval_rejects_context_mismatch_before_read() -> None:
         ).retrieve_owner_retirement_approval(claim, mismatched_context)
 
     client.get_item.assert_not_called()
+
+
+def test_successful_retirement_lock_issuance_uses_exact_registration_conditions() -> None:
+    client = Mock()
+    environment = make_environment()
+
+    lock = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).issue_retirement_lock(environment)
+
+    assert lock == RetirementLock(environment)
+    update_kwargs = client.update_item.call_args.kwargs
+    assert update_kwargs["Key"] == {"identifier": {"S": "env-123"}}
+    assert update_kwargs["UpdateExpression"] == (
+        "SET retirement_lock_state = :retirement_lock_state"
+    )
+    assert update_kwargs["ConditionExpression"] == (
+        "identifier = :identifier AND "
+        "registration_fingerprint = :registration_fingerprint AND "
+        "("
+        "attribute_not_exists(retirement_lock_state) OR "
+        "retirement_lock_state = :retirement_lock_state"
+        ")"
+    )
+    assert update_kwargs["ExpressionAttributeValues"] == {
+        ":identifier": {"S": "env-123"},
+        ":registration_fingerprint": {"S": immutable_registration_fingerprint(environment)},
+        ":retirement_lock_state": {"S": "locked"},
+    }
+
+
+def test_duplicate_retirement_lock_issuance_is_idempotent() -> None:
+    client = Mock()
+    environment = make_environment()
+
+    first = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).issue_retirement_lock(environment)
+    second = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).issue_retirement_lock(environment)
+
+    assert first == second
+    assert client.update_item.call_count == 2
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "missing registration",
+        "stale fingerprint",
+        "replaced registration",
+        "mismatched registration",
+        "conflicting lock state",
+        "partial lock state",
+        "malformed lock state",
+    ],
+)
+def test_retirement_lock_issuance_condition_failure_rejects_without_extra_mutation(
+    reason: str,
+) -> None:
+    client = Mock()
+    error = conditional_failure()
+    client.update_item.side_effect = error
+
+    with pytest.raises(ClientError) as raised:
+        DynamoDBActiveRegistrationAdapter(
+            client,
+            "active-environments",
+        ).issue_retirement_lock(make_environment())
+
+    assert raised.value is error
+    client.update_item.assert_called_once()
+    client.put_item.assert_not_called()
+    client.delete_item.assert_not_called()
+    client.transact_write_items.assert_not_called()
+    assert reason
+
+
+def test_retirement_lock_retrieval_returns_absence_for_exact_registration_without_lock() -> None:
+    client = Mock()
+    environment = make_environment()
+    client.get_item.return_value = {"Item": active_item_for_environment(environment)}
+
+    lock = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).retrieve_retirement_lock(environment)
+
+    assert lock is None
+
+
+def test_retirement_lock_retrieval_reconstructs_exact_lock() -> None:
+    client = Mock()
+    environment = make_environment()
+    client.get_item.return_value = {
+        "Item": active_item_for_environment(environment, include_lock=True)
+    }
+
+    lock = DynamoDBActiveRegistrationAdapter(
+        client,
+        "active-environments",
+    ).retrieve_retirement_lock(environment)
+
+    assert lock == RetirementLock(environment)
+
+
+@pytest.mark.parametrize(
+    "item_update",
+    [
+        None,
+        {"registration_fingerprint": {"S": "stale"}},
+        {"identifier": {"S": "env-456"}},
+        {"owner": {"S": "team-security"}},
+        {"retirement_lock_state": {"S": ""}},
+        {"retirement_lock_state": {"S": "unlocked"}},
+        {"retirement_lock_state": {"N": "1"}},
+    ],
+)
+def test_retirement_lock_retrieval_rejects_missing_stale_or_malformed_state(
+    item_update: dict[str, object] | None,
+) -> None:
+    client = Mock()
+    environment = make_environment()
+    if item_update is None:
+        client.get_item.return_value = {}
+    else:
+        item = active_item_for_environment(environment, include_lock=True)
+        item.update(item_update)
+        client.get_item.return_value = {"Item": item}
+
+    with pytest.raises(ValueError):
+        DynamoDBActiveRegistrationAdapter(
+            client,
+            "active-environments",
+        ).retrieve_retirement_lock(environment)
+
+
+def test_retirement_lock_fields_do_not_affect_fingerprint_or_gsi_attributes() -> None:
+    environment = make_environment()
+    before = immutable_registration_fingerprint(environment)
+    item = active_item_for_environment(environment, include_lock=True)
+
+    assert immutable_registration_fingerprint(environment) == before
+    assert "record_kind" not in {"retirement_lock_state"}
+    assert "ttl_expires_at" not in {"retirement_lock_state"}
+    assert item["retirement_lock_state"] == {"S": "locked"}
 
 
 def test_confirmed_matching_destruction_performs_conditional_delete() -> None:

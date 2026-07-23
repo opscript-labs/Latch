@@ -303,3 +303,9 @@ def test_owner_approval_has_no_external_api_route() -> None:
     routes = {(route.path, ",".join(sorted(route.methods or []))) for route in app.routes}
 
     assert not any("approval" in path for path, _ in routes)
+
+
+def test_retirement_lock_has_no_external_api_route() -> None:
+    routes = {(route.path, ",".join(sorted(route.methods or []))) for route in app.routes}
+
+    assert not any("lock" in path for path, _ in routes)

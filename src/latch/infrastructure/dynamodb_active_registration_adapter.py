@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 from latch.domain.admission import (
     AdmissionRequest,
     OwnerRetirementApproval,
+    RetirementLock,
 )
 from latch.domain.environment import Environment
 from latch.domain.environment.retirement_evaluation_claim import RetirementEvaluationClaim
@@ -236,6 +237,53 @@ class DynamoDBActiveRegistrationAdapter:
 
         return OwnerRetirementApproval(context=context, approved_by=approved_by)
 
+    def issue_retirement_lock(self, environment: Environment) -> RetirementLock:
+        if not isinstance(environment, Environment):
+            raise ValueError("environment must be an Environment")
+
+        self._dynamodb_client.update_item(
+            TableName=self._table_name,
+            Key={"identifier": {"S": environment.identifier}},
+            UpdateExpression="SET retirement_lock_state = :retirement_lock_state",
+            ConditionExpression=(
+                "identifier = :identifier AND "
+                "registration_fingerprint = :registration_fingerprint AND "
+                "("
+                "attribute_not_exists(retirement_lock_state) OR "
+                "retirement_lock_state = :retirement_lock_state"
+                ")"
+            ),
+            ExpressionAttributeValues={
+                ":identifier": {"S": environment.identifier},
+                ":registration_fingerprint": {"S": immutable_registration_fingerprint(environment)},
+                ":retirement_lock_state": {"S": "locked"},
+            },
+        )
+
+        return RetirementLock(environment)
+
+    def retrieve_retirement_lock(self, environment: Environment) -> RetirementLock | None:
+        if not isinstance(environment, Environment):
+            raise ValueError("environment must be an Environment")
+
+        response = self._dynamodb_client.get_item(
+            TableName=self._table_name,
+            Key={"identifier": {"S": environment.identifier}},
+        )
+        item = response.get("Item")
+        if not isinstance(item, dict):
+            raise ValueError("active registration is missing")
+
+        _validate_registration_item_for_environment(item, environment)
+
+        if "retirement_lock_state" not in item:
+            return None
+
+        if _required_item_string(item, "retirement_lock_state") != "locked":
+            raise ValueError("stored retirement lock state is malformed")
+
+        return RetirementLock(environment)
+
 
 def immutable_registration_fingerprint(environment: Environment) -> str:
     canonical_environment = {
@@ -351,6 +399,22 @@ def _validate_registration_item_for_claim(
 
     if _required_item_string(item, "owner") != claim.environment.owner:
         raise ValueError("active registration owner does not match claim")
+
+
+def _validate_registration_item_for_environment(
+    item: dict[str, Any],
+    environment: Environment,
+) -> None:
+    if _required_item_string(item, "identifier") != environment.identifier:
+        raise ValueError("active registration identifier does not match environment")
+
+    if _required_item_string(item, "registration_fingerprint") != (
+        immutable_registration_fingerprint(environment)
+    ):
+        raise ValueError("active registration fingerprint does not match environment")
+
+    if _required_item_string(item, "owner") != environment.owner:
+        raise ValueError("active registration owner does not match environment")
 
 
 def _required_item_string(item: dict[str, Any], name: str) -> str:
