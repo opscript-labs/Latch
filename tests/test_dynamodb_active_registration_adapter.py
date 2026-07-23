@@ -792,11 +792,12 @@ def test_retirement_lock_fields_do_not_affect_fingerprint_or_gsi_attributes() ->
 def test_confirmed_matching_destruction_performs_conditional_delete() -> None:
     client = Mock()
     environment = make_environment()
+    claim = make_claim(environment)
 
     DynamoDBActiveRegistrationAdapter(
         client,
         "active-environments",
-    ).deregister_confirmed(confirmed(environment))
+    ).deregister_confirmed(claim, confirmed(environment))
 
     transact_items = client.transact_write_items.call_args.kwargs["TransactItems"]
     assert transact_items == [
@@ -804,11 +805,19 @@ def test_confirmed_matching_destruction_performs_conditional_delete() -> None:
             "Delete": {
                 "TableName": "active-environments",
                 "Key": {"identifier": {"S": "env-123"}},
-                "ConditionExpression": ("registration_fingerprint = :registration_fingerprint"),
+                "ConditionExpression": (
+                    "identifier = :identifier AND "
+                    "registration_fingerprint = :registration_fingerprint AND "
+                    "evaluation_claim_token = :evaluation_claim_token AND "
+                    "evaluation_claim_time = :evaluation_claim_time"
+                ),
                 "ExpressionAttributeValues": {
+                    ":identifier": {"S": "env-123"},
                     ":registration_fingerprint": {
                         "S": immutable_registration_fingerprint(environment)
-                    }
+                    },
+                    ":evaluation_claim_token": {"S": "claim-token"},
+                    ":evaluation_claim_time": {"S": "2026-07-23T10:00:00.000000Z"},
                 },
             }
         },
@@ -835,11 +844,12 @@ def test_confirmed_matching_destruction_performs_conditional_delete() -> None:
 
 def test_non_confirmed_destruction_performs_no_dynamodb_call() -> None:
     client = Mock()
+    environment = make_environment()
 
     DynamoDBActiveRegistrationAdapter(
         client,
         "active-environments",
-    ).deregister_confirmed(not_confirmed(make_environment()))
+    ).deregister_confirmed(make_claim(environment), not_confirmed(environment))
 
     client.delete_item.assert_not_called()
     client.transact_write_items.assert_not_called()
@@ -848,16 +858,20 @@ def test_non_confirmed_destruction_performs_no_dynamodb_call() -> None:
 def test_stale_confirmation_cannot_delete_later_registration_with_same_identifier() -> None:
     client = Mock()
     environment = make_environment()
+    claim = make_claim(environment)
 
     DynamoDBActiveRegistrationAdapter(
         client,
         "active-environments",
-    ).deregister_confirmed(confirmed(environment))
+    ).deregister_confirmed(claim, confirmed(environment))
 
     delete = client.transact_write_items.call_args.kwargs["TransactItems"][0]["Delete"]
     assert delete["Key"] == {"identifier": {"S": "env-123"}}
     assert delete["ExpressionAttributeValues"] == {
-        ":registration_fingerprint": {"S": immutable_registration_fingerprint(environment)}
+        ":identifier": {"S": "env-123"},
+        ":registration_fingerprint": {"S": immutable_registration_fingerprint(environment)},
+        ":evaluation_claim_token": {"S": "claim-token"},
+        ":evaluation_claim_time": {"S": "2026-07-23T10:00:00.000000Z"},
     }
 
 
@@ -876,10 +890,11 @@ def test_conditional_delete_failure_propagates_unchanged() -> None:
     client.transact_write_items.side_effect = error
 
     with pytest.raises(ClientError) as raised:
+        environment = make_environment()
         DynamoDBActiveRegistrationAdapter(
             client,
             "active-environments",
-        ).deregister_confirmed(confirmed(make_environment()))
+        ).deregister_confirmed(make_claim(environment), confirmed(environment))
 
     assert raised.value is error
     client.delete_item.assert_not_called()
@@ -897,10 +912,11 @@ def test_confirmed_deregistration_transaction_failure_aborts_all_deletes(
     client.transact_write_items.side_effect = error
 
     with pytest.raises(ClientError) as raised:
+        environment = make_environment()
         DynamoDBActiveRegistrationAdapter(
             client,
             "active-environments",
-        ).deregister_confirmed(confirmed(make_environment()))
+        ).deregister_confirmed(make_claim(environment), confirmed(environment))
 
     assert raised.value is error
     client.transact_write_items.assert_called_once()
@@ -917,7 +933,7 @@ def test_adapter_does_not_mutate_environment_or_confirmation_inputs() -> None:
 
     adapter = DynamoDBActiveRegistrationAdapter(client, "active-environments")
     adapter.register(environment)
-    adapter.deregister_confirmed(confirmation)
+    adapter.deregister_confirmed(make_claim(environment), confirmation)
 
     assert environment.resource_target_arns == targets
     assert confirmation.environment == environment
@@ -931,7 +947,7 @@ def test_target_reuse_succeeds_after_confirmed_deregistration() -> None:
     second = make_environment(identifier="env-456")
 
     adapter.register(first)
-    adapter.deregister_confirmed(confirmed(first))
+    adapter.deregister_confirmed(make_claim(first), confirmed(first))
     adapter.register(second)
 
     assert client.transact_write_items.call_count == 3
