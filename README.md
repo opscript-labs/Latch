@@ -149,6 +149,19 @@ docs/
 - uv
 - Terraform
 
+### Required Environment Variables
+
+The FastAPI application requires the following environment variables to configure its DynamoDB client:
+
+- `LATCH_DYNAMODB_REGION`: The AWS Region where the active registration table is located.
+- `LATCH_ACTIVE_REGISTRATION_TABLE`: The name of the active registration DynamoDB table.
+
+### AWS Credentials Resolution
+
+- **Local Development**: The API attempts to use the standard AWS SDK credentials provider chain (such as local AWS profiles or environment credentials).
+- **ECS Containers**: If `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` is present in the environment, the API will use ECS task-role credentials.
+- **AWS Lambda**: The retirement admission Lambda resolves credentials through its own execution IAM role.
+
 Install dependencies:
 
 ```bash
@@ -158,8 +171,20 @@ uv sync --dev
 Start the API:
 
 ```bash
+export LATCH_DYNAMODB_REGION="us-east-1"
+export LATCH_ACTIVE_REGISTRATION_TABLE="latch-active-registrations"
+
 uv run uvicorn latch.main:app --reload
 ```
+
+## AWS Deployment and Terraform
+
+The active registration DynamoDB table is externally managed. The Latch Terraform configuration does not provision this table but instead expects its name and ARN as variables.
+
+### Terraform Inputs
+
+- `active_registration_table_name`: The name of the pre-existing, externally supplied DynamoDB active registration table.
+- `active_registration_table_arn`: The ARN of the pre-existing, externally supplied DynamoDB active registration table.
 
 ---
 
