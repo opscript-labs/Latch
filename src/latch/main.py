@@ -118,7 +118,14 @@ def _compose_active_registration_adapter() -> DynamoDBActiveRegistrationAdapter:
         raise RuntimeError("LATCH_ACTIVE_REGISTRATION_TABLE must be a valid table name")
 
     try:
-        session = create_ecs_task_role_session()
+        import boto3  # type: ignore[import-untyped]
+
+        if "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI" in os.environ:
+            session = create_ecs_task_role_session()
+        else:
+            session = boto3.Session()
+            if session.get_credentials() is None:
+                raise RuntimeError("No usable AWS credentials found")
     except ECSTaskRoleCredentialError as error:
         raise RuntimeError("ECS task-role credentials are required") from error
 

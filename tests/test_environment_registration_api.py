@@ -269,6 +269,7 @@ def test_invalid_ecs_credential_source_configuration_prevents_startup() -> None:
             {
                 "LATCH_DYNAMODB_REGION": "us-east-1",
                 "LATCH_ACTIVE_REGISTRATION_TABLE": "latch-active-environments",
+                "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI": "",
             },
             clear=True,
         ),

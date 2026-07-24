@@ -11,12 +11,12 @@ variable "lambda_function_name" {
 
 variable "active_registration_table_name" {
   type        = string
-  description = "The name of the DynamoDB active registration table."
+  description = "The name of the pre-existing, externally supplied DynamoDB active registration table."
 }
 
 variable "active_registration_table_arn" {
   type        = string
-  description = "The ARN of the DynamoDB active registration table."
+  description = "The ARN of the pre-existing, externally supplied DynamoDB active registration table."
 }
 
 variable "lambda_timeout_seconds" {
