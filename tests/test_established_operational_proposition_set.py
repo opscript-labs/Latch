@@ -28,7 +28,9 @@ def make_context(evaluated_at: datetime = EVALUATED_AT) -> AdmissionEvaluationCo
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={
+                "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
+            },
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=evaluated_at,
@@ -119,9 +121,7 @@ def test_established_operational_proposition_set_contains_activity_member() -> N
 
     aggregate = EstablishedOperationalPropositionSet(context, [support])
 
-    assert aggregate.members == frozenset(
-        {EstablishedOperationalProposition.OPERATIONAL_ACTIVITY}
-    )
+    assert aggregate.members == frozenset({EstablishedOperationalProposition.OPERATIONAL_ACTIVITY})
     assert aggregate.supporting_establishments == frozenset({support})
 
 
@@ -158,9 +158,7 @@ def test_duplicate_supports_for_one_proposition_retain_multiple_supports() -> No
         [first_support, second_support],
     )
 
-    assert aggregate.members == frozenset(
-        {EstablishedOperationalProposition.OPERATIONAL_ACTIVITY}
-    )
+    assert aggregate.members == frozenset({EstablishedOperationalProposition.OPERATIONAL_ACTIVITY})
     assert aggregate.supporting_establishments == frozenset({first_support, second_support})
 
 

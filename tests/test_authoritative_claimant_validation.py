@@ -30,9 +30,7 @@ def environment() -> Environment:
         created_at=datetime(2026, 7, 23, 8, 0, tzinfo=UTC),
         ttl_expires_at=datetime(2026, 7, 23, 10, 0, tzinfo=UTC),
         owner="real-owner",
-        resource_target_arns=[
-            "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
-        ],
+        resource_target_arns=["arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"],
     )
 
 

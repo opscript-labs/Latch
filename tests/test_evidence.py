@@ -41,9 +41,7 @@ def test_evidence_constructs_with_required_semantic_members() -> None:
         ("referent", " "),
     ],
 )
-def test_evidence_rejects_empty_semantic_members(
-    member_name: str, member_value: str
-) -> None:
+def test_evidence_rejects_empty_semantic_members(member_name: str, member_value: str) -> None:
     values = {
         "proposition": "cpu activity is below the approved retirement boundary",
         "referent": "temporary-environment:env-123",
@@ -175,10 +173,7 @@ def test_source_provenance_constructs_with_required_members() -> None:
     )
 
     assert source_provenance.source_system == "aws.cloudwatch.metrics"
-    assert (
-        source_provenance.source_occurrence
-        == "cloudwatch metric query at 2026-07-23T10:00:00Z"
-    )
+    assert source_provenance.source_occurrence == "cloudwatch metric query at 2026-07-23T10:00:00Z"
 
 
 @pytest.mark.parametrize(
@@ -190,9 +185,7 @@ def test_source_provenance_constructs_with_required_members() -> None:
         ("source_occurrence", " "),
     ],
 )
-def test_source_provenance_rejects_blank_members(
-    member_name: str, member_value: str
-) -> None:
+def test_source_provenance_rejects_blank_members(member_name: str, member_value: str) -> None:
     values = {
         "source_system": "aws.cloudwatch.metrics",
         "source_occurrence": "cloudwatch metric query at 2026-07-23T10:00:00Z",

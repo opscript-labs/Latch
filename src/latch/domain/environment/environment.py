@@ -59,9 +59,7 @@ class Environment:
 
             match = EC2_INSTANCE_ARN_PATTERN.fullmatch(resource_target_arn)
             if match is None:
-                raise ValueError(
-                    "resource_target_arns must contain valid EC2 instance ARNs"
-                )
+                raise ValueError("resource_target_arns must contain valid EC2 instance ARNs")
 
             account_ids.add(match.group("account_id"))
             regions.add(match.group("region"))

@@ -23,9 +23,7 @@ class OperationalAssertionProjection:
 
     def __post_init__(self) -> None:
         if not isinstance(self.association, EvidencePropositionClassificationAssociation):
-            raise ValueError(
-                "association must be an EvidencePropositionClassificationAssociation"
-            )
+            raise ValueError("association must be an EvidencePropositionClassificationAssociation")
 
         if not isinstance(self.context, AdmissionEvaluationContext):
             raise ValueError("context must be an AdmissionEvaluationContext")

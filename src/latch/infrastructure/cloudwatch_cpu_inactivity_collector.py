@@ -15,8 +15,7 @@ from latch.infrastructure.dynamodb_active_registration_adapter import (
 
 
 class CloudWatchClient(Protocol):
-    def get_metric_data(self, **kwargs: Any) -> Any:
-        ...
+    def get_metric_data(self, **kwargs: Any) -> Any: ...
 
 
 CPU_INACTIVITY_THRESHOLD_PERCENT = 1.0

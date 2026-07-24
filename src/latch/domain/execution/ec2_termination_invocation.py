@@ -51,9 +51,7 @@ class EC2TerminationInvocation:
         seen_targets: set[str] = set()
         for result in result_values:
             if not isinstance(result, EC2TerminationInvocationResult):
-                raise ValueError(
-                    "results must contain EC2TerminationInvocationResult values"
-                )
+                raise ValueError("results must contain EC2TerminationInvocationResult values")
 
             if result.target_arn not in registered_targets:
                 raise ValueError("returned target ARN must be registered on the Environment")
@@ -71,11 +69,7 @@ class EC2TerminationInvocation:
     def _registered_targets_from_authorization(
         authorization: RetirementExecutionAuthorization,
     ) -> frozenset[str]:
-        return (
-            authorization.verdict.lock_participation.owner_approval_participation
-            .prerequisite_status.readiness.association_set.context.environment
-            .resource_target_arns
-        )
+        return authorization.verdict.lock_participation.owner_approval_participation.prerequisite_status.readiness.association_set.context.environment.resource_target_arns
 
     def _derive_outcome(
         self,

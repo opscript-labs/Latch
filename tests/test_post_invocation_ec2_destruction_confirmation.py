@@ -88,9 +88,7 @@ def make_association(
         EvidencePropositionClassification.OPERATIONAL_INACTIVITY,
     )
     return OperationalDimensionAssociation(
-        OperationalAssertionEstablishment(
-            OperationalAssertionProjection(classification, context)
-        ),
+        OperationalAssertionEstablishment(OperationalAssertionProjection(classification, context)),
         dimension,
     )
 
@@ -114,9 +112,7 @@ def make_authorization(
         prerequisite_status,
         OwnerRetirementApproval(context, "team-platform"),
     )
-    verdict = RetirementAdmissionVerdict(
-        RetirementLockParticipation(owner_participation)
-    )
+    verdict = RetirementAdmissionVerdict(RetirementLockParticipation(owner_participation))
     return RetirementExecutionAuthorization(verdict)
 
 
@@ -205,19 +201,22 @@ def test_confirmed_and_not_confirmed_results_return_unchanged() -> None:
     confirmed = make_confirmation(claim.environment, confirmed=True)
     not_confirmed = make_confirmation(claim.environment, confirmed=False)
 
-    assert make_coordinator(ConfirmationAdapterStub(confirmed)).confirm(
-        claim,
-        make_invocation(claim),
-    ) is confirmed
-    assert make_coordinator(ConfirmationAdapterStub(not_confirmed)).confirm(
-        claim,
-        make_invocation(claim),
-    ) is not_confirmed
-    assert confirmed.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_CONFIRMED
     assert (
-        not_confirmed.outcome
-        is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
+        make_coordinator(ConfirmationAdapterStub(confirmed)).confirm(
+            claim,
+            make_invocation(claim),
+        )
+        is confirmed
     )
+    assert (
+        make_coordinator(ConfirmationAdapterStub(not_confirmed)).confirm(
+            claim,
+            make_invocation(claim),
+        )
+        is not_confirmed
+    )
+    assert confirmed.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_CONFIRMED
+    assert not_confirmed.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
 
 
 def test_environment_trace_mismatch_returns_no_confirmation_without_adapter_call() -> None:
@@ -245,11 +244,7 @@ def test_evaluation_time_trace_mismatch_returns_no_confirmation_without_adapter_
 def test_action_trace_mismatch_returns_no_confirmation_without_adapter_call() -> None:
     claim = make_claim()
     invocation = make_invocation(claim)
-    context = (
-        invocation.authorization.verdict.lock_participation
-        .owner_approval_participation.prerequisite_status.readiness.association_set
-        .context
-    )
+    context = invocation.authorization.verdict.lock_participation.owner_approval_participation.prerequisite_status.readiness.association_set.context
     object.__setattr__(context, "requested_retirement", "release")
     adapter = ConfirmationAdapterStub(make_confirmation(claim.environment))
 
@@ -278,15 +273,13 @@ def test_inputs_remain_unchanged() -> None:
     authorization = invocation.authorization
     environment = claim.environment
 
-    make_coordinator(
-        ConfirmationAdapterStub(make_confirmation(claim.environment))
-    ).confirm(claim, invocation)
+    make_coordinator(ConfirmationAdapterStub(make_confirmation(claim.environment))).confirm(
+        claim, invocation
+    )
 
     assert claim.environment == environment
     assert invocation.authorization == authorization
     assert (
-        invocation.authorization.verdict.lock_participation
-        .owner_approval_participation.prerequisite_status.readiness.association_set
-        .context.environment
+        invocation.authorization.verdict.lock_participation.owner_approval_participation.prerequisite_status.readiness.association_set.context.environment
         == environment
     )

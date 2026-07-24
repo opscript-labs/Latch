@@ -30,7 +30,7 @@ def test_terraform_sfn_iam_policy_permissions() -> None:
 def test_terraform_outputs_are_present() -> None:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     outputs_path = os.path.join(repo_root, "infrastructure", "terraform", "outputs.tf")
-    
+
     with open(outputs_path) as f:
         content = f.read()
 

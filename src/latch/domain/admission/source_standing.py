@@ -62,16 +62,10 @@ class OperationalAssertionEstablishment:
         if standing is not SourceStandingOutcome.STANDING:
             return OperationalEstablishmentOutcome.ESTABLISHES_NOTHING
 
-        if (
-            self.projection.outcome
-            is OperationalAssertionOutcome.ASSERTS_OPERATIONAL_ACTIVITY
-        ):
+        if self.projection.outcome is OperationalAssertionOutcome.ASSERTS_OPERATIONAL_ACTIVITY:
             return OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_ACTIVITY
 
-        if (
-            self.projection.outcome
-            is OperationalAssertionOutcome.ASSERTS_OPERATIONAL_INACTIVITY
-        ):
+        if self.projection.outcome is OperationalAssertionOutcome.ASSERTS_OPERATIONAL_INACTIVITY:
             return OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_INACTIVITY
 
         return OperationalEstablishmentOutcome.ESTABLISHES_NOTHING

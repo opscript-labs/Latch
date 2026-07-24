@@ -25,9 +25,7 @@ class OperationalConflictStatus:
         object.__setattr__(self, "outcome", self._derive_outcome())
 
     def _derive_outcome(self) -> OperationalConflictStatusOutcome:
-        recognition_outcomes = {
-            recognition.outcome for recognition in self.coverage.recognitions
-        }
+        recognition_outcomes = {recognition.outcome for recognition in self.coverage.recognitions}
 
         if (
             OperationalConflictRecognitionOutcome.OPERATIONAL_CONFLICT_RECOGNIZED

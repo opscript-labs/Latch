@@ -18,12 +18,9 @@ class RetirementAdmissionRequest:
             or not self.retirement_claim_identity.strip()
         ):
             raise ValueError("retirement_claim_identity must be a non-empty string")
-        if (
-            not isinstance(self.claimant_identity, str)
-            or not self.claimant_identity.strip()
-        ):
+        if not isinstance(self.claimant_identity, str) or not self.claimant_identity.strip():
             raise ValueError("claimant_identity must be a non-empty string")
-        
+
         # Ingress claimant identity shall be validated exactly as approved.
         # claimant_identity == Environment.owner (exact case-sensitive check)
         if self.claimant_identity != self.environment_identity.owner:

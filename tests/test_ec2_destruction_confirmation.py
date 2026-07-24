@@ -59,16 +59,11 @@ def test_all_registered_targets_reported_terminated_is_confirmed() -> None:
 
 def test_one_missing_registered_target_is_not_confirmed() -> None:
     confirmation = EC2DestructionConfirmation(
-        environment=make_environment(
-            resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET})
-        ),
+        environment=make_environment(resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET})),
         reported_states=[state(FIRST_TARGET, "terminated")],
     )
 
-    assert (
-        confirmation.outcome
-        is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
-    )
+    assert confirmation.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
 
 
 def test_one_non_terminated_state_is_not_confirmed() -> None:
@@ -77,17 +72,12 @@ def test_one_non_terminated_state_is_not_confirmed() -> None:
         reported_states=[state(FIRST_TARGET, "stopped")],
     )
 
-    assert (
-        confirmation.outcome
-        is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
-    )
+    assert confirmation.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
 
 
 def test_multiple_registered_targets_reported_terminated_are_confirmed() -> None:
     confirmation = EC2DestructionConfirmation(
-        environment=make_environment(
-            resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET})
-        ),
+        environment=make_environment(resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET})),
         reported_states=[
             state(FIRST_TARGET, "terminated"),
             state(SECOND_TARGET, "terminated"),
@@ -123,9 +113,7 @@ def test_empty_or_whitespace_lifecycle_state_is_rejected(lifecycle_state: str) -
 
 
 def test_reported_state_set_order_does_not_affect_equality_or_hashing() -> None:
-    environment = make_environment(
-        resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET})
-    )
+    environment = make_environment(resource_target_arns=frozenset({FIRST_TARGET, SECOND_TARGET}))
     first = EC2DestructionConfirmation(
         environment=environment,
         reported_states=[

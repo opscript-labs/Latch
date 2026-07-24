@@ -66,9 +66,7 @@ def make_association(
         classification=EvidencePropositionClassification.OPERATIONAL_INACTIVITY,
     )
     return OperationalDimensionAssociation(
-        OperationalAssertionEstablishment(
-            OperationalAssertionProjection(association, context)
-        ),
+        OperationalAssertionEstablishment(OperationalAssertionProjection(association, context)),
         dimension,
     )
 

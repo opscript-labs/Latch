@@ -39,18 +39,13 @@ class RetirementAdmissionCoordinator:
 
         # Authoritative claimant validation against the registered database owner
         if claimant_identity is not None:
-            if (
-                not isinstance(claimant_identity, str)
-                or not claimant_identity.strip()
-            ):
+            if not isinstance(claimant_identity, str) or not claimant_identity.strip():
                 raise ValueError("claimant_identity must be a non-empty string")
             db_owner = self._active_claim_validator.get_authoritative_owner(
                 claim.environment.identifier
             )
             if db_owner is None or claimant_identity != db_owner:
-                raise ValueError(
-                    "Claimant identity does not match authoritative registered owner"
-                )
+                raise ValueError("Claimant identity does not match authoritative registered owner")
 
         if (
             self._active_claim_validator.validate(claim)

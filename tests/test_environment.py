@@ -43,9 +43,7 @@ def test_environment_accepts_single_account_single_region_targets() -> None:
         resource_target_arns={ec2_instance_arn(1), ec2_instance_arn(2)},
     )
 
-    assert environment.resource_target_arns == frozenset(
-        {ec2_instance_arn(1), ec2_instance_arn(2)}
-    )
+    assert environment.resource_target_arns == frozenset({ec2_instance_arn(1), ec2_instance_arn(2)})
 
 
 def test_environment_rejects_account_mismatch_targets() -> None:
@@ -172,9 +170,7 @@ def test_environment_rejects_non_ec2_service_arns() -> None:
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-            resource_target_arns={
-                "arn:aws:s3:us-east-1:123456789012:instance/i-0123456789abcdef0"
-            },
+            resource_target_arns={"arn:aws:s3:us-east-1:123456789012:instance/i-0123456789abcdef0"},
         )
 
 
@@ -264,18 +260,14 @@ def test_changed_target_membership_creates_distinct_environment_identity() -> No
         created_at=CREATED_AT,
         ttl_expires_at=TTL_EXPIRES_AT,
         owner="team-platform",
-        resource_target_arns={
-            "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
-        },
+        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
     )
     second = Environment(
         identifier="env-123",
         created_at=CREATED_AT,
         ttl_expires_at=TTL_EXPIRES_AT,
         owner="team-platform",
-        resource_target_arns={
-            "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba9876543210"
-        },
+        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba9876543210"},
     )
 
     assert first != second

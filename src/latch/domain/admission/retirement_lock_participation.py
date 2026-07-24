@@ -16,9 +16,7 @@ class RetirementLockParticipation:
 
     def __post_init__(self) -> None:
         if not isinstance(self.owner_approval_participation, OwnerApprovalParticipation):
-            raise ValueError(
-                "owner_approval_participation must be an OwnerApprovalParticipation"
-            )
+            raise ValueError("owner_approval_participation must be an OwnerApprovalParticipation")
 
         if self.lock is not None:
             if not isinstance(self.lock, RetirementLock):
@@ -31,10 +29,7 @@ class RetirementLockParticipation:
 
     @property
     def _environment(self) -> Environment:
-        return (
-            self.owner_approval_participation.prerequisite_status.readiness
-            .association_set.context.environment
-        )
+        return self.owner_approval_participation.prerequisite_status.readiness.association_set.context.environment
 
     def _derive_outcome(self) -> OwnerApprovalParticipationOutcome:
         if self.lock is not None:

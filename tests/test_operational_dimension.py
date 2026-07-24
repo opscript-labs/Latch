@@ -28,7 +28,9 @@ def make_context() -> AdmissionEvaluationContext:
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={
+                "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
+            },
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=EVALUATED_AT,
@@ -110,9 +112,7 @@ def test_operational_dimension_association_equality() -> None:
 
 
 def test_operational_dimension_association_differs_by_establishment() -> None:
-    first_establishment = make_establishment(
-        evidence=make_evidence("cpu activity was observed")
-    )
+    first_establishment = make_establishment(evidence=make_evidence("cpu activity was observed"))
     second_establishment = make_establishment(
         evidence=make_evidence("network activity was observed")
     )

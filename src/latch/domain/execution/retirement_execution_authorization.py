@@ -7,9 +7,7 @@ from latch.domain.admission import AdmissionVerdict, RetirementAdmissionVerdict
 class RetirementExecutionAuthorizationOutcome(Enum):
     RETIREMENT_EXECUTION_AUTHORIZED = "RETIREMENT_EXECUTION_AUTHORIZED"
     RETIREMENT_EXECUTION_REFUSED_UNSAFE = "RETIREMENT_EXECUTION_REFUSED_UNSAFE"
-    RETIREMENT_EXECUTION_REFUSED_INSUFFICIENT = (
-        "RETIREMENT_EXECUTION_REFUSED_INSUFFICIENT"
-    )
+    RETIREMENT_EXECUTION_REFUSED_INSUFFICIENT = "RETIREMENT_EXECUTION_REFUSED_INSUFFICIENT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,12 +26,6 @@ class RetirementExecutionAuthorization:
             return RetirementExecutionAuthorizationOutcome.RETIREMENT_EXECUTION_AUTHORIZED
 
         if self.verdict.verdict is AdmissionVerdict.UNSAFE:
-            return (
-                RetirementExecutionAuthorizationOutcome
-                .RETIREMENT_EXECUTION_REFUSED_UNSAFE
-            )
+            return RetirementExecutionAuthorizationOutcome.RETIREMENT_EXECUTION_REFUSED_UNSAFE
 
-        return (
-            RetirementExecutionAuthorizationOutcome
-            .RETIREMENT_EXECUTION_REFUSED_INSUFFICIENT
-        )
+        return RetirementExecutionAuthorizationOutcome.RETIREMENT_EXECUTION_REFUSED_INSUFFICIENT

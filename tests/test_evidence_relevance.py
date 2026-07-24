@@ -27,18 +27,10 @@ TTL_EXPIRES_AT = datetime(2026, 7, 23, 12, 0, tzinfo=UTC)
 EVALUATED_AT = datetime(2026, 7, 23, 10, 0, tzinfo=UTC)
 FIRST_TARGET = "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
 SECOND_TARGET = "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba9876543210"
-SIMILAR_INSTANCE_ID_TARGET = (
-    "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef1"
-)
-SIMILAR_ACCOUNT_TARGET = (
-    "arn:aws:ec2:us-east-1:123456789013:instance/i-0123456789abcdef0"
-)
-SIMILAR_REGION_TARGET = (
-    "arn:aws:ec2:us-west-2:123456789012:instance/i-0123456789abcdef0"
-)
-SIMILAR_TEXT_TARGET = (
-    " arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
-)
+SIMILAR_INSTANCE_ID_TARGET = "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef1"
+SIMILAR_ACCOUNT_TARGET = "arn:aws:ec2:us-east-1:123456789013:instance/i-0123456789abcdef0"
+SIMILAR_REGION_TARGET = "arn:aws:ec2:us-west-2:123456789012:instance/i-0123456789abcdef0"
+SIMILAR_TEXT_TARGET = " arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
 
 
 def make_environment(

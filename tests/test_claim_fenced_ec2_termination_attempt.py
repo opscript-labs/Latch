@@ -132,9 +132,7 @@ def make_verdict(
     approval = OwnerRetirementApproval(context, "team-platform") if with_approval else None
     owner_participation = OwnerApprovalParticipation(prerequisite_status, approval)
     lock = RetirementLock(context.environment) if with_lock else None
-    return RetirementAdmissionVerdict(
-        RetirementLockParticipation(owner_participation, lock)
-    )
+    return RetirementAdmissionVerdict(RetirementLockParticipation(owner_participation, lock))
 
 
 def make_unresolved_verdict(
@@ -217,9 +215,7 @@ def test_valid_safe_trace_valid_claim_invokes_adapter_once_and_returns_invocatio
 
 def test_valid_safe_trace_invalid_final_claim_returns_no_invocation() -> None:
     claim = make_claim()
-    validator = ActiveClaimValidatorStub(
-        ActiveClaimValidationResult.INVALID_ACTIVE_CLAIM
-    )
+    validator = ActiveClaimValidatorStub(ActiveClaimValidationResult.INVALID_ACTIVE_CLAIM)
     adapter = TerminationAdapterStub()
 
     result = make_attempt(validator, adapter).attempt(claim, make_verdict(claim))
@@ -294,10 +290,7 @@ def test_evaluation_time_trace_mismatch_rejects_before_validator_or_adapter() ->
 def test_action_trace_mismatch_rejects_before_validator_or_adapter() -> None:
     claim = make_claim()
     verdict = make_verdict(claim)
-    context = (
-        verdict.lock_participation.owner_approval_participation.prerequisite_status
-        .readiness.association_set.context
-    )
+    context = verdict.lock_participation.owner_approval_participation.prerequisite_status.readiness.association_set.context
     object.__setattr__(context, "requested_retirement", "release")
     validator = ActiveClaimValidatorStub(ActiveClaimValidationResult.VALID_ACTIVE_CLAIM)
     adapter = TerminationAdapterStub()
@@ -332,10 +325,7 @@ def test_non_accepted_adapter_outcome_is_returned_unchanged() -> None:
     ).attempt(claim, make_verdict(claim))
 
     assert isinstance(result, EC2TerminationInvocation)
-    assert (
-        result.outcome
-        is EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_NOT_ACCEPTED
-    )
+    assert result.outcome is EC2TerminationInvocationOutcome.EC2_TERMINATION_REQUEST_NOT_ACCEPTED
     assert result is not None
     assert result == EC2TerminationInvocation(adapter.calls[0], result.results)
 
@@ -354,7 +344,6 @@ def test_inputs_remain_unchanged() -> None:
     assert claim.environment == environment
     assert verdict.lock_participation == lock_participation
     assert (
-        verdict.lock_participation.owner_approval_participation.prerequisite_status
-        .readiness.association_set.context.environment
+        verdict.lock_participation.owner_approval_participation.prerequisite_status.readiness.association_set.context.environment
         == environment
     )

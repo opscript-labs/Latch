@@ -300,10 +300,7 @@ def test_invocation_and_result_are_immutable() -> None:
 def test_invocation_does_not_mutate_upstream_artifacts() -> None:
     authorization = make_authorization()
     verdict = authorization.verdict
-    environment = (
-        verdict.lock_participation.owner_approval_participation.prerequisite_status
-        .readiness.association_set.context.environment
-    )
+    environment = verdict.lock_participation.owner_approval_participation.prerequisite_status.readiness.association_set.context.environment
     targets = environment.resource_target_arns
 
     invocation = EC2TerminationInvocation(

@@ -13,9 +13,7 @@ from latch.domain.admission.retirement_timing_eligibility import (
 
 class RetirementPrerequisiteStatusOutcome(Enum):
     RETIREMENT_PREREQUISITES_SATISFIED = "RETIREMENT_PREREQUISITES_SATISFIED"
-    RETIREMENT_PREREQUISITES_NOT_SATISFIED = (
-        "RETIREMENT_PREREQUISITES_NOT_SATISFIED"
-    )
+    RETIREMENT_PREREQUISITES_NOT_SATISFIED = "RETIREMENT_PREREQUISITES_NOT_SATISFIED"
     RETIREMENT_PREREQUISITES_UNRESOLVED = "RETIREMENT_PREREQUISITES_UNRESOLVED"
 
 
@@ -29,9 +27,7 @@ class RetirementPrerequisiteStatus:
         if not isinstance(self.readiness, OperationalRetirementReadiness):
             raise ValueError("readiness must be an OperationalRetirementReadiness")
 
-        timing_eligibility = RetirementTimingEligibility(
-            self.readiness.association_set.context
-        )
+        timing_eligibility = RetirementTimingEligibility(self.readiness.association_set.context)
 
         object.__setattr__(self, "timing_eligibility", timing_eligibility)
         object.__setattr__(self, "outcome", self._derive_outcome(timing_eligibility))

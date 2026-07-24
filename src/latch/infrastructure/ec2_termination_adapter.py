@@ -26,12 +26,8 @@ class EC2TerminationAdapter:
         environment = _environment_from_authorization(authorization)
         parsed_targets = _parse_environment_targets(environment)
         region = _single_value({target["region"] for target in parsed_targets})
-        instance_ids_by_target = {
-            target["arn"]: target["instance_id"] for target in parsed_targets
-        }
-        target_by_instance_id = {
-            target["instance_id"]: target["arn"] for target in parsed_targets
-        }
+        instance_ids_by_target = {target["arn"]: target["instance_id"] for target in parsed_targets}
+        target_by_instance_id = {target["instance_id"]: target["arn"] for target in parsed_targets}
 
         session = create_ecs_task_role_session()
         ec2_client = session.client("ec2", region_name=region)
@@ -54,10 +50,7 @@ class EC2TerminationAdapter:
 def _environment_from_authorization(
     authorization: RetirementExecutionAuthorization,
 ) -> Environment:
-    return (
-        authorization.verdict.lock_participation.owner_approval_participation
-        .prerequisite_status.readiness.association_set.context.environment
-    )
+    return authorization.verdict.lock_participation.owner_approval_participation.prerequisite_status.readiness.association_set.context.environment
 
 
 def _parse_environment_targets(environment: Environment) -> tuple[dict[str, str], ...]:

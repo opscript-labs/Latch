@@ -38,7 +38,9 @@ def make_context(evaluated_at: datetime = CONTEXT_EVALUATED_AT) -> AdmissionEval
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={
+                "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
+            },
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=evaluated_at,
@@ -101,8 +103,7 @@ def test_earlier_and_later_instants_are_directed_and_reverse() -> None:
     reversed_relationship = OperationalTemporalRelationship(first=second, second=first)
 
     assert (
-        relationship.outcome
-        is OperationalTemporalRelationshipOutcome.FIRST_WHOLELY_BEFORE_SECOND
+        relationship.outcome is OperationalTemporalRelationshipOutcome.FIRST_WHOLELY_BEFORE_SECOND
     )
     assert (
         reversed_relationship.outcome
@@ -136,8 +137,7 @@ def test_instant_before_closed_interval_is_before() -> None:
     relationship = OperationalTemporalRelationship(first=instant, second=interval)
 
     assert (
-        relationship.outcome
-        is OperationalTemporalRelationshipOutcome.FIRST_WHOLELY_BEFORE_SECOND
+        relationship.outcome is OperationalTemporalRelationshipOutcome.FIRST_WHOLELY_BEFORE_SECOND
     )
 
 
@@ -152,10 +152,7 @@ def test_instant_after_closed_interval_is_after() -> None:
 
     relationship = OperationalTemporalRelationship(first=instant, second=interval)
 
-    assert (
-        relationship.outcome
-        is OperationalTemporalRelationshipOutcome.FIRST_WHOLELY_AFTER_SECOND
-    )
+    assert relationship.outcome is OperationalTemporalRelationshipOutcome.FIRST_WHOLELY_AFTER_SECOND
 
 
 def test_overlapping_intervals_overlap() -> None:
@@ -205,8 +202,7 @@ def test_disjoint_intervals_are_directed_and_reverse() -> None:
     reversed_relationship = OperationalTemporalRelationship(first=second, second=first)
 
     assert (
-        relationship.outcome
-        is OperationalTemporalRelationshipOutcome.FIRST_WHOLELY_BEFORE_SECOND
+        relationship.outcome is OperationalTemporalRelationshipOutcome.FIRST_WHOLELY_BEFORE_SECOND
     )
     assert (
         reversed_relationship.outcome
@@ -232,10 +228,7 @@ def test_timeless_pairings_are_timeless_involved(
     reversed_relationship = OperationalTemporalRelationship(first=other, second=timeless)
 
     assert relationship.outcome is OperationalTemporalRelationshipOutcome.TIMELESS_INVOLVED
-    assert (
-        reversed_relationship.outcome
-        is OperationalTemporalRelationshipOutcome.TIMELESS_INVOLVED
-    )
+    assert reversed_relationship.outcome is OperationalTemporalRelationshipOutcome.TIMELESS_INVOLVED
 
 
 def test_operational_temporal_relationship_rejects_different_dimensions() -> None:

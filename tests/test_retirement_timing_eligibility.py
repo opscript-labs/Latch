@@ -52,20 +52,13 @@ def test_pre_expiry_is_not_eligible() -> None:
         context=make_context(evaluated_at=TTL_EXPIRES_AT - timedelta(microseconds=1))
     )
 
-    assert (
-        eligibility.outcome
-        is RetirementTimingEligibilityOutcome.RETIREMENT_TIME_NOT_ELIGIBLE
-    )
+    assert eligibility.outcome is RetirementTimingEligibilityOutcome.RETIREMENT_TIME_NOT_ELIGIBLE
 
 
 def test_exact_expiry_is_eligible() -> None:
-    eligibility = RetirementTimingEligibility(
-        context=make_context(evaluated_at=TTL_EXPIRES_AT)
-    )
+    eligibility = RetirementTimingEligibility(context=make_context(evaluated_at=TTL_EXPIRES_AT))
 
-    assert (
-        eligibility.outcome is RetirementTimingEligibilityOutcome.RETIREMENT_TIME_ELIGIBLE
-    )
+    assert eligibility.outcome is RetirementTimingEligibilityOutcome.RETIREMENT_TIME_ELIGIBLE
 
 
 def test_post_expiry_is_eligible() -> None:
@@ -73,9 +66,7 @@ def test_post_expiry_is_eligible() -> None:
         context=make_context(evaluated_at=TTL_EXPIRES_AT + timedelta(seconds=1))
     )
 
-    assert (
-        eligibility.outcome is RetirementTimingEligibilityOutcome.RETIREMENT_TIME_ELIGIBLE
-    )
+    assert eligibility.outcome is RetirementTimingEligibilityOutcome.RETIREMENT_TIME_ELIGIBLE
 
 
 def test_identity_and_hashing_depend_only_on_context() -> None:
@@ -122,9 +113,7 @@ def test_retirement_timing_eligibility_is_immutable() -> None:
     eligibility = RetirementTimingEligibility(context=make_context())
 
     with pytest.raises(FrozenInstanceError):
-        eligibility.outcome = (
-            RetirementTimingEligibilityOutcome.RETIREMENT_TIME_NOT_ELIGIBLE
-        )
+        eligibility.outcome = RetirementTimingEligibilityOutcome.RETIREMENT_TIME_NOT_ELIGIBLE
 
 
 def test_retirement_timing_eligibility_preserves_context_and_environment() -> None:

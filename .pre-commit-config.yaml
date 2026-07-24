@@ -8,7 +8,10 @@ repos:
     rev: v1.16.0
     hooks:
       - id: mypy
+        pass_filenames: false
         args: ["src"]
         additional_dependencies:
           - fastapi
           - pydantic
+          - boto3
+          - botocore

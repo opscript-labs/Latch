@@ -68,11 +68,12 @@ def test_build_handler_fails_closed_on_invalid_env(
 
 def test_handle_event_caching_and_delegation(mock_session: Mock, valid_env: dict[str, str]) -> None:
     import latch.infrastructure.retirement_admission_lambda_entrypoint as entrypoint
+
     entrypoint._cached_handler = None
 
     event = {"version": "1"}
     mock_handler = Mock(return_value={"status": "success"})
-    
+
     with (
         patch(
             "latch.infrastructure.retirement_admission_lambda_entrypoint.boto3.Session",
@@ -97,6 +98,7 @@ def test_handle_event_caching_and_delegation(mock_session: Mock, valid_env: dict
 
 def test_handle_event_fails_closed_on_initialization_exception(mock_session: Mock) -> None:
     import latch.infrastructure.retirement_admission_lambda_entrypoint as entrypoint
+
     entrypoint._cached_handler = None
 
     with (

@@ -38,7 +38,9 @@ def make_context(evaluated_at: datetime = CONTEXT_EVALUATED_AT) -> AdmissionEval
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={
+                "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
+            },
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=evaluated_at,
@@ -122,8 +124,7 @@ def test_incompatible_maps_to_operational_conflict_recognized() -> None:
     recognition = OperationalConflictRecognition(compatibility=compatibility)
 
     assert (
-        recognition.outcome
-        is OperationalConflictRecognitionOutcome.OPERATIONAL_CONFLICT_RECOGNIZED
+        recognition.outcome is OperationalConflictRecognitionOutcome.OPERATIONAL_CONFLICT_RECOGNIZED
     )
 
 

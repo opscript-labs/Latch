@@ -168,9 +168,7 @@ def test_non_member_target_is_rejected_before_collection() -> None:
     "collected_association",
     [
         make_association(referent=OTHER_TARGET),
-        make_association(
-            temporal_context=EvidenceInstant(CLAIM_TIME + timedelta(microseconds=1))
-        ),
+        make_association(temporal_context=EvidenceInstant(CLAIM_TIME + timedelta(microseconds=1))),
         make_association(source_system="aws.unapproved.metrics"),
         make_association(
             classification=EvidencePropositionClassification.OPERATIONAL_ACTIVITY,

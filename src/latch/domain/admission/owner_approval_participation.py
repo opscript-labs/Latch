@@ -23,9 +23,7 @@ class OwnerApprovalParticipation:
 
     def __post_init__(self) -> None:
         if not isinstance(self.prerequisite_status, RetirementPrerequisiteStatus):
-            raise ValueError(
-                "prerequisite_status must be a RetirementPrerequisiteStatus"
-            )
+            raise ValueError("prerequisite_status must be a RetirementPrerequisiteStatus")
 
         if self.approval is not None:
             if not isinstance(self.approval, OwnerRetirementApproval):

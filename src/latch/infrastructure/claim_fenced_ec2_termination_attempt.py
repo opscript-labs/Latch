@@ -63,7 +63,4 @@ class ClaimFencedEC2TerminationAttempt:
 def _context_from_verdict(
     verdict: RetirementAdmissionVerdict,
 ) -> AdmissionEvaluationContext:
-    return (
-        verdict.lock_participation.owner_approval_participation.prerequisite_status
-        .readiness.association_set.context
-    )
+    return verdict.lock_participation.owner_approval_participation.prerequisite_status.readiness.association_set.context

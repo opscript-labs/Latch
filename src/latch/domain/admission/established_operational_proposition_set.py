@@ -47,10 +47,7 @@ class EstablishedOperationalPropositionSet:
     def members(self) -> frozenset[EstablishedOperationalProposition]:
         members: set[EstablishedOperationalProposition] = set()
         for support in self.supporting_establishments:
-            if (
-                support.outcome
-                is OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_ACTIVITY
-            ):
+            if support.outcome is OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_ACTIVITY:
                 members.add(EstablishedOperationalProposition.OPERATIONAL_ACTIVITY)
             elif (
                 support.outcome

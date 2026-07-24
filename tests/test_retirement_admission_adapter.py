@@ -57,7 +57,7 @@ def make_mock_verdict(verdict_enum: AdmissionVerdict) -> Any:
 
 
 def test_valid_request_constructs_exact_claim_and_calls_evaluator_once(
-    valid_payload: dict[str, Any]
+    valid_payload: dict[str, Any],
 ) -> None:
     mock_verdict = make_mock_verdict(AdmissionVerdict.SAFE)
     evaluator = MockEvaluator(mock_verdict)
@@ -280,9 +280,7 @@ def test_product_models_behavior() -> None:
         created_at=datetime(2026, 7, 23, 8, 0, tzinfo=UTC),
         ttl_expires_at=datetime(2026, 7, 23, 10, 0, tzinfo=UTC),
         owner="team-platform",
-        resource_target_arns=[
-            "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
-        ],
+        resource_target_arns=["arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"],
     )
     request = RetirementAdmissionRequest(
         environment_identity=environment,

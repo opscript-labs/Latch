@@ -29,7 +29,9 @@ def make_context(identifier: str = "env-123") -> AdmissionEvaluationContext:
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={
+                "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
+            },
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=EVALUATED_AT,
@@ -98,8 +100,7 @@ def test_approved_source_standing_pairs_return_standing(
     classification: EvidencePropositionClassification,
 ) -> None:
     assert (
-        determine_source_standing(source_system, classification)
-        is SourceStandingOutcome.STANDING
+        determine_source_standing(source_system, classification) is SourceStandingOutcome.STANDING
     )
 
 
@@ -142,10 +143,7 @@ def test_relevant_activity_assertion_with_standing_establishes_activity() -> Non
         )
     )
 
-    assert (
-        establishment.outcome
-        is OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_ACTIVITY
-    )
+    assert establishment.outcome is OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_ACTIVITY
 
 
 def test_relevant_inactivity_assertion_with_standing_establishes_inactivity() -> None:
@@ -157,8 +155,7 @@ def test_relevant_inactivity_assertion_with_standing_establishes_inactivity() ->
     )
 
     assert (
-        establishment.outcome
-        is OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_INACTIVITY
+        establishment.outcome is OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_INACTIVITY
     )
 
 

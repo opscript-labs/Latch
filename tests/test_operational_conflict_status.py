@@ -39,7 +39,9 @@ def make_context() -> AdmissionEvaluationContext:
             created_at=CREATED_AT,
             ttl_expires_at=TTL_EXPIRES_AT,
             owner="team-platform",
-        resource_target_arns={"arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"},
+            resource_target_arns={
+                "arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0"
+            },
         ),
         requested_retirement=AdmissionRequest.RETIREMENT,
         evaluated_at=CONTEXT_EVALUATED_AT,
@@ -145,10 +147,7 @@ def test_unresolved_only_coverage_maps_to_unresolved_status() -> None:
 
     status = OperationalConflictStatus(coverage=coverage)
 
-    assert (
-        status.outcome
-        is OperationalConflictStatusOutcome.OPERATIONAL_CONFLICT_STATUS_UNRESOLVED
-    )
+    assert status.outcome is OperationalConflictStatusOutcome.OPERATIONAL_CONFLICT_STATUS_UNRESOLVED
 
 
 def test_no_recognized_no_unresolved_coverage_maps_to_no_conflict_recognized() -> None:
@@ -171,10 +170,7 @@ def test_no_recognized_no_unresolved_coverage_maps_to_no_conflict_recognized() -
 
     status = OperationalConflictStatus(coverage=coverage)
 
-    assert (
-        status.outcome
-        is OperationalConflictStatusOutcome.NO_OPERATIONAL_CONFLICT_RECOGNIZED
-    )
+    assert status.outcome is OperationalConflictStatusOutcome.NO_OPERATIONAL_CONFLICT_RECOGNIZED
 
 
 def test_empty_coverage_maps_to_no_conflict_recognized() -> None:
@@ -184,10 +180,7 @@ def test_empty_coverage_maps_to_no_conflict_recognized() -> None:
         )
     )
 
-    assert (
-        status.outcome
-        is OperationalConflictStatusOutcome.NO_OPERATIONAL_CONFLICT_RECOGNIZED
-    )
+    assert status.outcome is OperationalConflictStatusOutcome.NO_OPERATIONAL_CONFLICT_RECOGNIZED
 
 
 def test_recognized_conflict_takes_precedence_over_unresolved_results() -> None:

@@ -16,8 +16,7 @@ class RetirementEvaluator(Protocol):
         self,
         claim: RetirementEvaluationClaim,
         claimant_identity: str,
-    ) -> RetirementAdmissionVerdict | None:
-        ...
+    ) -> RetirementAdmissionVerdict | None: ...
 
 
 class EnvironmentTransport(BaseModel):

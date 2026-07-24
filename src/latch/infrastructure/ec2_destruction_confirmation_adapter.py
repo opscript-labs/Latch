@@ -14,12 +14,8 @@ class EC2DestructionConfirmationAdapter:
 
         parsed_targets = _parse_environment_targets(environment)
         region = _single_value({target["region"] for target in parsed_targets})
-        instance_ids_by_target = {
-            target["arn"]: target["instance_id"] for target in parsed_targets
-        }
-        target_by_instance_id = {
-            target["instance_id"]: target["arn"] for target in parsed_targets
-        }
+        instance_ids_by_target = {target["arn"]: target["instance_id"] for target in parsed_targets}
+        target_by_instance_id = {target["instance_id"]: target["arn"] for target in parsed_targets}
 
         session = create_ecs_task_role_session()
         ec2_client = session.client("ec2", region_name=region)

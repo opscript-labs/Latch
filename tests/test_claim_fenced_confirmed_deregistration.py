@@ -140,9 +140,7 @@ def test_confirmation_environment_mismatch_skips_validator_and_mutation() -> Non
 
 def test_invalid_final_claim_skips_dynamodb_mutation() -> None:
     claim = make_claim()
-    validator = ActiveClaimValidatorStub(
-        ActiveClaimValidationResult.INVALID_ACTIVE_CLAIM
-    )
+    validator = ActiveClaimValidatorStub(ActiveClaimValidationResult.INVALID_ACTIVE_CLAIM)
     adapter = ActiveRegistrationAdapterStub()
 
     result = make_coordinator(validator, adapter).deregister(

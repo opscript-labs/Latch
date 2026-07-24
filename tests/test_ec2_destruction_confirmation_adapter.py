@@ -58,8 +58,7 @@ def test_one_regional_client_created_for_registered_target_region() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         EC2DestructionConfirmationAdapter().confirm(make_environment())
@@ -90,8 +89,7 @@ def test_describe_instances_receives_exactly_registered_instance_ids() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         EC2DestructionConfirmationAdapter().confirm(
@@ -108,8 +106,7 @@ def test_complete_explicit_terminated_response_confirms_destruction() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         confirmation = EC2DestructionConfirmationAdapter().confirm(make_environment())
@@ -122,11 +119,7 @@ def test_one_non_terminated_state_does_not_confirm_destruction() -> None:
     client = make_client(
         {
             "Reservations": [
-                {
-                    "Instances": [
-                        {"InstanceId": "i-0123456789abcdef0", "State": {"Name": "stopped"}}
-                    ]
-                }
+                {"Instances": [{"InstanceId": "i-0123456789abcdef0", "State": {"Name": "stopped"}}]}
             ]
         }
     )
@@ -134,16 +127,12 @@ def test_one_non_terminated_state_does_not_confirm_destruction() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         confirmation = EC2DestructionConfirmationAdapter().confirm(make_environment())
 
-    assert (
-        confirmation.outcome
-        is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
-    )
+    assert confirmation.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
 
 
 def test_missing_registered_target_does_not_confirm_destruction() -> None:
@@ -165,18 +154,14 @@ def test_missing_registered_target_does_not_confirm_destruction() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         confirmation = EC2DestructionConfirmationAdapter().confirm(
             make_environment(frozenset({FIRST_TARGET, SECOND_TARGET}))
         )
 
-    assert (
-        confirmation.outcome
-        is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
-    )
+    assert confirmation.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
 
 
 def test_duplicate_response_target_does_not_confirm_destruction() -> None:
@@ -202,16 +187,12 @@ def test_duplicate_response_target_does_not_confirm_destruction() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         confirmation = EC2DestructionConfirmationAdapter().confirm(make_environment())
 
-    assert (
-        confirmation.outcome
-        is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
-    )
+    assert confirmation.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
 
 
 def test_unexpected_response_target_does_not_confirm_destruction() -> None:
@@ -237,16 +218,12 @@ def test_unexpected_response_target_does_not_confirm_destruction() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         confirmation = EC2DestructionConfirmationAdapter().confirm(make_environment())
 
-    assert (
-        confirmation.outcome
-        is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
-    )
+    assert confirmation.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
 
 
 @pytest.mark.parametrize(
@@ -266,16 +243,12 @@ def test_malformed_reservation_instance_id_or_state_does_not_confirm_destruction
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         confirmation = EC2DestructionConfirmationAdapter().confirm(make_environment())
 
-    assert (
-        confirmation.outcome
-        is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
-    )
+    assert confirmation.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
 
 
 def test_aws_sdk_request_failure_does_not_confirm_destruction() -> None:
@@ -287,16 +260,12 @@ def test_aws_sdk_request_failure_does_not_confirm_destruction() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         confirmation = EC2DestructionConfirmationAdapter().confirm(make_environment())
 
-    assert (
-        confirmation.outcome
-        is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
-    )
+    assert confirmation.outcome is EC2DestructionConfirmationOutcome.DESTRUCTION_NOT_CONFIRMED
 
 
 def test_credential_factory_failure_prevents_client_construction_and_request() -> None:
@@ -317,8 +286,7 @@ def test_adapter_never_invokes_terminate_instances() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         EC2DestructionConfirmationAdapter().confirm(make_environment())
@@ -332,8 +300,7 @@ def test_no_static_credentials_are_passed_to_client_creation() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         EC2DestructionConfirmationAdapter().confirm(make_environment())
@@ -347,8 +314,7 @@ def test_returned_object_is_existing_confirmation_artifact() -> None:
     session.client.return_value = client
 
     with patch(
-        "latch.infrastructure.ec2_destruction_confirmation_adapter"
-        ".create_ecs_task_role_session",
+        "latch.infrastructure.ec2_destruction_confirmation_adapter.create_ecs_task_role_session",
         return_value=session,
     ):
         confirmation = EC2DestructionConfirmationAdapter().confirm(make_environment())

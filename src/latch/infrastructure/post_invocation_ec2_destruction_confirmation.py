@@ -44,8 +44,4 @@ class PostInvocationEC2DestructionConfirmation:
 def _context_from_invocation(
     invocation: EC2TerminationInvocation,
 ) -> AdmissionEvaluationContext:
-    return (
-        invocation.authorization.verdict.lock_participation
-        .owner_approval_participation.prerequisite_status.readiness.association_set
-        .context
-    )
+    return invocation.authorization.verdict.lock_participation.owner_approval_participation.prerequisite_status.readiness.association_set.context

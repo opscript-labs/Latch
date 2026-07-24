@@ -39,9 +39,7 @@ def create_ecs_task_role_session() -> boto3.Session:
 def _validated_container_provider_environ() -> dict[str, str]:
     raw_relative_uri = os.environ.get(ECS_RELATIVE_URI_ENV_VAR)
     if raw_relative_uri is None:
-        raise ECSTaskRoleCredentialError(
-            "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI is required"
-        )
+        raise ECSTaskRoleCredentialError("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI is required")
 
     relative_uri = raw_relative_uri.strip()
     if relative_uri != raw_relative_uri or not relative_uri:

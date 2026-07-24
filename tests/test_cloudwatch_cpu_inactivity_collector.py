@@ -64,7 +64,9 @@ def metric_response(
     return response
 
 
-def collect_with_response(response: dict[str, object]) -> tuple[
+def collect_with_response(
+    response: dict[str, object],
+) -> tuple[
     EvidencePropositionClassificationAssociation | None,
     Mock,
     Mock,

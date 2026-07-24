@@ -43,18 +43,12 @@ class OperationalAssertionCompatibility:
         object.__setattr__(self, "outcome", self._derive_outcome())
 
     def _derive_outcome(self) -> OperationalCompatibilityOutcome:
-        outcomes = {
-            association.establishment.outcome for association in self.associations
-        }
+        outcomes = {association.establishment.outcome for association in self.associations}
 
-        if outcomes == {
-            OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_ACTIVITY
-        }:
+        if outcomes == {OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_ACTIVITY}:
             return OperationalCompatibilityOutcome.COMPATIBLE
 
-        if outcomes == {
-            OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_INACTIVITY
-        }:
+        if outcomes == {OperationalEstablishmentOutcome.ESTABLISHES_OPERATIONAL_INACTIVITY}:
             return OperationalCompatibilityOutcome.COMPATIBLE
 
         if self.temporal_relationship.outcome is OperationalTemporalRelationshipOutcome.OVERLAPPING:
