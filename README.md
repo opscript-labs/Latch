@@ -160,6 +160,47 @@ docs/
 
 ---
 
+## Architecture
+
+Latch separates trusted registration ingress from deterministic retirement
+admission and execution.
+
+### System Architecture
+
+![Latch system architecture](docs/assets/latch-architecture-overview.png)
+
+The system architecture shows the major trust boundaries, admission workflow,
+execution boundary, and supporting AWS infrastructure.
+
+### Implementation Architecture
+
+![Latch implementation architecture](docs/assets/latch-implementation-overview.png)
+
+The implementation architecture maps those product boundaries to FastAPI,
+Step Functions, Lambda, application services, evidence collection,
+DynamoDB persistence, EC2 execution, destruction confirmation,
+and confirmed deregistration.
+
+Detailed architecture specifications are available in
+[`docs/architecture/README.md`](docs/architecture/README.md).
+
+### Terraform Layout
+
+```text
+infrastructure/terraform/dev/
+    Local development
+    └── DynamoDB active-registration table
+
+infrastructure/terraform/
+    Runtime infrastructure
+    ├── Lambda
+    ├── Step Functions
+    └── IAM
+```
+
+The development configuration provisions local infrastructure for development.
+The root Terraform configuration deploys the retirement admission runtime.
+
 ## Local Development
 
 ### Requirements
